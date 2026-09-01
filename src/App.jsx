@@ -4,7 +4,7 @@ import Login from './Login.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'library'
+  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'library' | 'wishlist'
   
   // Search View State
   const [query, setQuery] = useState('');
@@ -16,10 +16,15 @@ export default function App() {
   const dropdownRef = useRef(null);
   const isSearchingRef = useRef(false);
 
-  // Library View & Shared Data State
+  // Library & Wishlist Data State
   const [libraryMap, setLibraryMap] = useState({});
   const [libraryList, setLibraryList] = useState([]);
+  const [wishlistMap, setWishlistMap] = useState({});
+  const [wishlistList, setWishlistList] = useState([]);
+  
+  // Filters & Inputs
   const [librarySearch, setLibrarySearch] = useState('');
+  const [wishlistSearch, setWishlistSearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('');
   const [tagInputs, setTagInputs] = useState({});
 
@@ -40,6 +45,7 @@ export default function App() {
   useEffect(() => {
     if (session?.user?.id) {
       fetchLibrary(session.user.id);
+      fetchWishlist(session.user.id);
     }
   }, [session]);
 
@@ -99,9 +105,7 @@ export default function App() {
     }
 
     const qtyMap = {};
-    const formattedData = data || [];
-
-    formattedData.forEach((item) => {
+    (data || []).forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
       if (cleanSid) {
         qtyMap[cleanSid] = {
@@ -113,7 +117,30 @@ export default function App() {
     });
 
     setLibraryMap(qtyMap);
-    setLibraryList(formattedData);
+    setLibraryList(data || []);
+  };
+
+  const fetchWishlist = async (userId) => {
+    const { data, error } = await supabase
+      .from('user_wishlist')
+      .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching wishlist:', error);
+      return;
+    }
+
+    const map = {};
+    (data || []).forEach((item) => {
+      const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
+      if (cleanSid) {
+        map[cleanSid] = item.desired_quantity || 1;
+      }
+    });
+
+    setWishlistMap(map);
+    setWishlistList(data || []);
   };
 
   const executeSearch = async (searchQuery) => {
@@ -187,6 +214,67 @@ export default function App() {
     }
   };
 
+  const handleToggleWishlist = async (card) => {
+    if (!session?.user?.id) return;
+
+    const scryfallId = String(card.id || card.scryfall_id).trim().toLowerCase();
+    const isWishlisted = !!wishlistMap[scryfallId];
+
+    if (isWishlisted) {
+      const { error } = await supabase
+        .from('user_wishlist')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('scryfall_id', card.id || card.scryfall_id);
+
+      if (error) alert(`Wishlist Delete Error: ${error.message}`);
+    } else {
+      const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
+      const { error } = await supabase
+        .from('user_wishlist')
+        .upsert(
+          {
+            user_id: session.user.id,
+            scryfall_id: card.id || card.scryfall_id,
+            card_name: card.name || card.card_name,
+            set_name: card.set_name,
+            image_url: imgUrl,
+            desired_quantity: 1,
+          },
+          { onConflict: 'user_id, scryfall_id' }
+        );
+
+      if (error) alert(`Wishlist Error: ${error.message}`);
+    }
+
+    await fetchWishlist(session.user.id);
+  };
+
+  const handleUpdateWishlistQty = async (card, delta) => {
+    if (!session?.user?.id) return;
+
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+    const currentQty = wishlistMap[scryfallId] || 1;
+    const newQty = currentQty + delta;
+
+    if (newQty <= 0) {
+      await handleToggleWishlist(card);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('user_wishlist')
+      .update({ desired_quantity: newQty })
+      .eq('user_id', session.user.id)
+      .eq('scryfall_id', card.scryfall_id || card.id);
+
+    if (error) {
+      alert(`Wishlist Qty Error: ${error.message}`);
+    } else {
+      await fetchWishlist(session.user.id);
+    }
+  };
+
   const handleAddTag = async (card, tagToAdd) => {
     const tag = tagToAdd.trim().toLowerCase();
     if (!tag || !session?.user?.id) return;
@@ -239,6 +327,8 @@ export default function App() {
     await supabase.auth.signOut();
     setLibraryMap({});
     setLibraryList([]);
+    setWishlistMap({});
+    setWishlistList([]);
     setSearchResults([]);
   };
 
@@ -257,6 +347,11 @@ export default function App() {
 
     return matchesSearch && matchesTag;
   });
+
+  const filteredWishlist = wishlistList.filter((card) =>
+    card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
+    card.set_name?.toLowerCase().includes(wishlistSearch.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
@@ -278,7 +373,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Navigation Tabs */}
         <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700 mb-6">
           <button
             onClick={() => setActiveTab('search')}
@@ -300,11 +395,21 @@ export default function App() {
           >
             📚 My Library ({libraryList.length})
           </button>
+          <button
+            onClick={() => setActiveTab('wishlist')}
+            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
+              activeTab === 'wishlist'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            ✨ Wishlist ({wishlistList.length})
+          </button>
         </div>
 
-        {activeTab === 'search' ? (
+        {/* Tab Content */}
+        {activeTab === 'search' && (
           <div>
-            {/* Search Input Controls */}
             <div ref={dropdownRef} className="relative mb-8">
               <form
                 onSubmit={(e) => {
@@ -351,13 +456,13 @@ export default function App() {
               )}
             </div>
 
-            {/* Results Grid */}
             <div className="space-y-4">
               {searchResults.map((card) => {
                 const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
                 const cleanId = String(card.id).trim().toLowerCase();
                 const owned = libraryMap[cleanId] || { reg: 0, foil: 0 };
                 const totalOwned = owned.reg + owned.foil;
+                const isWishlisted = !!wishlistMap[cleanId];
 
                 return (
                   <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-center">
@@ -368,8 +473,18 @@ export default function App() {
                     )}
 
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg">{card.name}</h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-bold text-lg">{card.name}</h3>
+                        <button
+                          onClick={() => handleToggleWishlist(card)}
+                          className={`text-xl transition-transform active:scale-125 cursor-pointer`}
+                          title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
+                        >
+                          {isWishlisted ? '❤️' : '🤍'}
+                        </button>
+                      </div>
                       <p className="text-sm text-slate-500">{card.set_name}</p>
+                      
                       {totalOwned > 0 && (
                         <span className="inline-block mt-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-sm border border-emerald-200 dark:border-emerald-800">
                           📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
@@ -401,9 +516,10 @@ export default function App() {
               })}
             </div>
           </div>
-        ) : (
+        )}
+
+        {activeTab === 'library' && (
           <div>
-            {/* Library Search & Tag Filter Inputs */}
             <div className="flex flex-col md:flex-row gap-4 mb-6">
               <input
                 type="text"
@@ -420,23 +536,19 @@ export default function App() {
               >
                 <option value="">All Tags</option>
                 {allAvailableTags.map((tag) => (
-                  <option key={tag} value={tag}>
-                    🏷️ {tag}
-                  </option>
+                  <option key={tag} value={tag}>🏷️ {tag}</option>
                 ))}
               </select>
             </div>
 
-            {/* Library List Grid */}
             <div className="space-y-4">
               {filteredLibrary.length === 0 ? (
-                <div className="text-center py-12 text-slate-500">
-                  No cards found matching your collection criteria.
-                </div>
+                <div className="text-center py-12 text-slate-500">No cards found matching your collection.</div>
               ) : (
                 filteredLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const currentTags = card.tags || [];
+                  const isWishlisted = !!wishlistMap[scryfallId];
 
                   return (
                     <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
@@ -447,36 +559,31 @@ export default function App() {
                       )}
 
                       <div className="flex-1 space-y-2">
-                        <div>
+                        <div className="flex items-center gap-3">
                           <h3 className="font-bold text-lg">{card.card_name}</h3>
-                          <p className="text-sm text-slate-500">{card.set_name}</p>
+                          <button
+                            onClick={() => handleToggleWishlist(card)}
+                            className="text-xl transition-transform active:scale-125 cursor-pointer"
+                            title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
+                          >
+                            {isWishlisted ? '❤️' : '🤍'}
+                          </button>
                         </div>
+                        <p className="text-sm text-slate-500">{card.set_name}</p>
 
-                        {/* Tag Chips */}
                         <div className="flex flex-wrap gap-2 items-center pt-1">
                           {currentTags.map((tag) => (
                             <span key={tag} className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-full text-xs font-medium">
                               🏷️ {tag}
-                              <button
-                                onClick={() => handleRemoveTag(card, tag)}
-                                className="text-slate-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer"
-                              >
-                                ×
-                              </button>
+                              <button onClick={() => handleRemoveTag(card, tag)} className="text-slate-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer">×</button>
                             </span>
                           ))}
 
-                          {/* Add Tag Inline Form */}
                           <input
                             type="text"
                             placeholder="+ add tag"
                             value={tagInputs[scryfallId] || ''}
-                            onChange={(e) =>
-                              setTagInputs((prev) => ({
-                                ...prev,
-                                [scryfallId]: e.target.value,
-                              }))
-                            }
+                            onChange={(e) => setTagInputs((prev) => ({ ...prev, [scryfallId]: e.target.value }))}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -488,7 +595,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Quantity Controls */}
                       <div className="flex flex-col gap-3 min-w-[130px]">
                         <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg">
                           <span className="text-xs font-semibold ml-1">Reg</span>
@@ -506,6 +612,88 @@ export default function App() {
                             <span className="w-6 text-center text-xs font-bold">{card.foil_quantity}</span>
                             <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-7 h-7 bg-amber-500 text-white rounded font-bold cursor-pointer">+</button>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'wishlist' && (
+          <div>
+            <div className="mb-6">
+              <input
+                type="text"
+                value={wishlistSearch}
+                onChange={(e) => setWishlistSearch(e.target.value)}
+                placeholder="Search wishlist..."
+                className="w-full p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+
+            <div className="space-y-4">
+              {filteredWishlist.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">Your wishlist is empty.</div>
+              ) : (
+                filteredWishlist.map((card) => {
+                  const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+                  const owned = libraryMap[scryfallId] || { reg: 0, foil: 0 };
+                  const totalOwned = owned.reg + owned.foil;
+
+                  return (
+                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-center">
+                      {card.image_url ? (
+                        <img src={card.image_url} alt={card.card_name} className="w-24 rounded-lg" />
+                      ) : (
+                        <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                      )}
+
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-bold text-lg">{card.card_name}</h3>
+                          <button
+                            onClick={() => handleToggleWishlist(card)}
+                            className="text-xl transition-transform active:scale-125 cursor-pointer"
+                            title="Remove from Wishlist"
+                          >
+                            ❤️
+                          </button>
+                        </div>
+                        <p className="text-sm text-slate-500">{card.set_name}</p>
+
+                        {totalOwned > 0 ? (
+                          <span className="inline-block mt-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-xs font-medium border border-emerald-200 dark:border-emerald-800">
+                            📦 In Collection: {totalOwned}x
+                          </span>
+                        ) : (
+                          <span className="inline-block mt-3 bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full text-xs font-medium">
+                            Not in library
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Wishlist Quantity Selector */}
+                      <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[130px]">
+                        <span className="text-xs font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleUpdateWishlistQty(card, -1)}
+                            className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="w-6 text-center text-xs font-bold text-pink-900 dark:text-pink-200">
+                            {card.desired_quantity}
+                          </span>
+                          <button
+                            onClick={() => handleUpdateWishlistQty(card, 1)}
+                            className="w-7 h-7 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                          >
+                            +
+                          </button>
                         </div>
                       </div>
                     </div>
