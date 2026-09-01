@@ -1,24 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import Login from './Login';
 
 export default function App() {
+  const [session, setSession] = useState(null);
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // TODO: Replace with your actual logged-in user UUID from Supabase
-  const USER_ID = "YOUR_USER_UUID";
-
+  // Check initial session & listen for auth state changes
   useEffect(() => {
-    fetchLibraryQuantities();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const fetchLibraryQuantities = async () => {
+  // Fetch quantities whenever session updates
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchLibraryQuantities(session.user.id);
+    }
+  }, [session]);
+
+  const fetchLibraryQuantities = async (userId) => {
     const { data, error } = await supabase
       .from('user_cards')
       .select('scryfall_id, reg_quantity, foil_quantity')
-      .eq('user_id', USER_ID);
+      .eq('user_id', userId);
 
     if (error) {
       console.error('Error fetching library from Supabase:', error);
@@ -44,7 +61,6 @@ export default function App() {
     setLoading(true);
 
     try {
-      // 'unique=prints' returns all printings/sets of the searched card
       const res = await fetch(
         `https://api.scryfall.com/cards/search?unique=prints&q=!%22${encodeURIComponent(query.trim())}%22`
       );
@@ -58,6 +74,8 @@ export default function App() {
   };
 
   const handleAddCard = async (card, isFoil) => {
+    if (!session?.user?.id) return;
+
     const scryfallId = String(card.id).trim().toLowerCase();
     const current = libraryMap[scryfallId] || { reg: 0, foil: 0 };
     const newReg = isFoil ? current.reg : current.reg + 1;
@@ -67,7 +85,7 @@ export default function App() {
       .from('user_cards')
       .upsert(
         {
-          user_id: USER_ID,
+          user_id: session.user.id,
           scryfall_id: card.id,
           card_name: card.name,
           set_name: card.set_name,
@@ -87,13 +105,36 @@ export default function App() {
     }
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setLibraryMap({});
+    setSearchResults([]);
+  };
+
+  // Render Login screen if user is not authenticated
+  if (!session) {
+    return <Login />;
+  }
+
   return (
-    // Outer wrapper adds full-screen dark background and system dark mode detection
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors">
       <div className="max-w-4xl mx-auto p-6 font-sans">
-        <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-100">
-          MTG Library Search
-        </h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
+            MTG Library Search
+          </h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {session.user.email}
+            </span>
+            <button
+              onClick={handleSignOut}
+              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
         
         <form onSubmit={handleSearch} className="mb-8 flex gap-3">
           <input
