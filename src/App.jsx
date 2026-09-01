@@ -51,7 +51,7 @@ export default function App() {
         const json = await res.json();
         setSuggestions(json.data || []);
         setShowDropdown(true);
-        setSelectedIndex(-1); // Reset highlight when new suggestions arrive
+        setSelectedIndex(-1);
       } catch (err) {
         console.error('Autocomplete fetch error:', err);
       }
@@ -61,7 +61,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking anywhere outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -97,7 +97,6 @@ export default function App() {
     setLibraryMap(qtyMap);
   };
 
-  // Execute full search on submission or suggestion click
   const executeSearch = async (searchQuery) => {
     if (!searchQuery.trim()) return;
     setLoading(true);
@@ -119,6 +118,7 @@ export default function App() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setShowDropdown(false);
     if (showDropdown && selectedIndex >= 0 && suggestions[selectedIndex]) {
       const selectedName = suggestions[selectedIndex];
       setQuery(selectedName);
@@ -148,11 +148,11 @@ export default function App() {
   };
 
   const handleSelectSuggestion = (cardName) => {
+    setShowDropdown(false);
     setQuery(cardName);
     executeSearch(cardName);
   };
 
-  // Upsert cards into public.user_cards
   const handleAddCard = async (card, isFoil) => {
     if (!session?.user?.id) return;
 
