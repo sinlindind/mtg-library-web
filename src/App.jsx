@@ -358,7 +358,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
-      <div className="max-w-4xl mx-auto p-6 font-sans">
+      <div className="max-w-6xl mx-auto p-6 font-sans">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
             MTG Personal Library
@@ -459,7 +459,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {searchResults.map((card) => {
                 const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
                 const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
@@ -469,55 +469,55 @@ export default function App() {
                 const isWishlisted = !!wishlistMap[cleanId];
 
                 return (
-                  <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
+                  <div key={card.id} className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                     {imgUrl ? (
                       <img 
                         src={imgUrl} 
                         alt={card.name} 
                         onClick={() => setPreviewImage(highResUrl)}
-                        className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                        className="w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0" 
                         title="Click to view full resolution"
                       />
                     ) : (
-                      <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                      <div className="w-56 h-80 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-xs text-slate-400 shrink-0">No Image</div>
                     )}
 
-                    <div className="flex-1">
+                    <div className="flex-1 space-y-3">
                       <div className="flex items-center gap-3">
-                        <h3 className="font-bold text-lg">{card.name}</h3>
+                        <h3 className="font-bold text-xl">{card.name}</h3>
                         <button
                           onClick={() => handleToggleWishlist(card)}
-                          className={`text-xl transition-transform active:scale-125 cursor-pointer`}
+                          className="text-2xl transition-transform active:scale-125 cursor-pointer"
                           title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
                         >
                           {isWishlisted ? '❤️' : '🤍'}
                         </button>
                       </div>
-                      <p className="text-sm text-slate-500">{card.set_name}</p>
+                      <p className="text-base text-slate-500">{card.set_name}</p>
                       
                       {totalOwned > 0 && (
-                        <span className="inline-block mt-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-sm border border-emerald-200 dark:border-emerald-800">
+                        <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
                           📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
                         </span>
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-3 min-w-[130px]">
-                      <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg">
-                        <span className="text-xs font-semibold ml-1">Reg</span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={owned.reg === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
-                          <span className="w-6 text-center text-xs font-bold">{owned.reg}</span>
-                          <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-7 h-7 bg-blue-600 text-white rounded font-bold cursor-pointer">+</button>
+                    <div className="flex flex-col gap-3 min-w-[150px] w-full sm:w-auto">
+                      <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-2 rounded-lg">
+                        <span className="text-sm font-semibold ml-1">Reg</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={owned.reg === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                          <span className="w-6 text-center text-sm font-bold">{owned.reg}</span>
+                          <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-8 h-8 bg-blue-600 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg">
-                        <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={owned.foil === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
-                          <span className="w-6 text-center text-xs font-bold">{owned.foil}</span>
-                          <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-7 h-7 bg-amber-500 text-white rounded font-bold cursor-pointer">+</button>
+                      <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
+                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={owned.foil === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                          <span className="w-6 text-center text-sm font-bold">{owned.foil}</span>
+                          <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-8 h-8 bg-amber-500 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                         </div>
                       </div>
                     </div>
@@ -551,7 +551,7 @@ export default function App() {
               </select>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {filteredLibrary.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No cards found matching your collection.</div>
               ) : (
@@ -561,37 +561,37 @@ export default function App() {
                   const isWishlisted = !!wishlistMap[scryfallId];
 
                   return (
-                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
+                    <div key={card.id} className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                       {card.image_url ? (
                         <img 
                           src={card.image_url} 
                           alt={card.card_name} 
                           onClick={() => setPreviewImage(card.image_url)}
-                          className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                          className="w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0" 
                           title="Click to view full resolution"
                         />
                       ) : (
-                        <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                        <div className="w-56 h-80 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-xs text-slate-400 shrink-0">No Image</div>
                       )}
 
-                      <div className="flex-1 space-y-2">
+                      <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-3">
-                          <h3 className="font-bold text-lg">{card.card_name}</h3>
+                          <h3 className="font-bold text-xl">{card.card_name}</h3>
                           <button
                             onClick={() => handleToggleWishlist(card)}
-                            className="text-xl transition-transform active:scale-125 cursor-pointer"
+                            className="text-2xl transition-transform active:scale-125 cursor-pointer"
                             title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
                           >
                             {isWishlisted ? '❤️' : '🤍'}
                           </button>
                         </div>
-                        <p className="text-sm text-slate-500">{card.set_name}</p>
+                        <p className="text-base text-slate-500">{card.set_name}</p>
 
-                        <div className="flex flex-wrap gap-2 items-center pt-1">
+                        <div className="flex flex-wrap gap-2 items-center pt-2">
                           {currentTags.map((tag) => (
-                            <span key={tag} className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-full text-xs font-medium">
+                            <span key={tag} className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-3 py-1 rounded-full text-xs font-medium">
                               🏷️ {tag}
-                              <button onClick={() => handleRemoveTag(card, tag)} className="text-slate-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer">×</button>
+                              <button onClick={() => handleRemoveTag(card, tag)} className="text-slate-400 hover:text-red-500 font-bold ml-1 cursor-pointer">×</button>
                             </span>
                           ))}
 
@@ -606,27 +606,27 @@ export default function App() {
                                 handleAddTag(card, tagInputs[scryfallId] || '');
                               }
                             }}
-                            className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-24"
+                            className="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-28"
                           />
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 min-w-[130px]">
-                        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg">
-                          <span className="text-xs font-semibold ml-1">Reg</span>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={card.reg_quantity === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
-                            <span className="w-6 text-center text-xs font-bold">{card.reg_quantity}</span>
-                            <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-7 h-7 bg-blue-600 text-white rounded font-bold cursor-pointer">+</button>
+                      <div className="flex flex-col gap-3 min-w-[150px] w-full sm:w-auto">
+                        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-2 rounded-lg">
+                          <span className="text-sm font-semibold ml-1">Reg</span>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={card.reg_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                            <span className="w-6 text-center text-sm font-bold">{card.reg_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-8 h-8 bg-blue-600 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg">
-                          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={card.foil_quantity === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
-                            <span className="w-6 text-center text-xs font-bold">{card.foil_quantity}</span>
-                            <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-7 h-7 bg-amber-500 text-white rounded font-bold cursor-pointer">+</button>
+                        <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
+                          <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={card.foil_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                            <span className="w-6 text-center text-sm font-bold">{card.foil_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-8 h-8 bg-amber-500 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                           </div>
                         </div>
                       </div>
@@ -650,7 +650,7 @@ export default function App() {
               />
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {filteredWishlist.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">Your wishlist is empty.</div>
               ) : (
@@ -660,58 +660,58 @@ export default function App() {
                   const totalOwned = owned.reg + owned.foil;
 
                   return (
-                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
+                    <div key={card.id} className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                       {card.image_url ? (
                         <img 
                           src={card.image_url} 
                           alt={card.card_name} 
                           onClick={() => setPreviewImage(card.image_url)}
-                          className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                          className="w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0" 
                           title="Click to view full resolution"
                         />
                       ) : (
-                        <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                        <div className="w-56 h-80 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-xs text-slate-400 shrink-0">No Image</div>
                       )}
 
-                      <div className="flex-1">
+                      <div className="flex-1 space-y-3">
                         <div className="flex items-center gap-3">
-                          <h3 className="font-bold text-lg">{card.card_name}</h3>
+                          <h3 className="font-bold text-xl">{card.card_name}</h3>
                           <button
                             onClick={() => handleToggleWishlist(card)}
-                            className="text-xl transition-transform active:scale-125 cursor-pointer"
+                            className="text-2xl transition-transform active:scale-125 cursor-pointer"
                             title="Remove from Wishlist"
                           >
                             ❤️
                           </button>
                         </div>
-                        <p className="text-sm text-slate-500">{card.set_name}</p>
+                        <p className="text-base text-slate-500">{card.set_name}</p>
 
                         {totalOwned > 0 ? (
-                          <span className="inline-block mt-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-xs font-medium border border-emerald-200 dark:border-emerald-800">
+                          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-xs font-medium border border-emerald-200 dark:border-emerald-800">
                             📦 In Collection: {totalOwned}x
                           </span>
                         ) : (
-                          <span className="inline-block mt-3 bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full text-xs font-medium">
+                          <span className="inline-block bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1.5 rounded-full text-xs font-medium">
                             Not in library
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[130px]">
-                        <span className="text-xs font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
-                        <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2.5 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[150px] w-full sm:w-auto">
+                        <span className="text-sm font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleUpdateWishlistQty(card, -1)}
-                            className="w-7 h-7 bg-white dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                            className="w-8 h-8 bg-white dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
                           >
                             -
                           </button>
-                          <span className="w-6 text-center text-xs font-bold text-pink-900 dark:text-pink-200">
+                          <span className="w-6 text-center text-sm font-bold text-pink-900 dark:text-pink-200">
                             {card.desired_quantity}
                           </span>
                           <button
                             onClick={() => handleUpdateWishlistQty(card, 1)}
-                            className="w-7 h-7 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                            className="w-8 h-8 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
                           >
                             +
                           </button>
@@ -732,7 +732,7 @@ export default function App() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-pointer"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-md w-full">
+          <div className="relative max-w-lg w-full">
             <button
               onClick={() => setPreviewImage(null)}
               className="absolute -top-10 right-0 text-white text-3xl font-bold hover:text-red-400 cursor-pointer"
