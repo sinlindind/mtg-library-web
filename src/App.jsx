@@ -361,7 +361,7 @@ export default function App() {
       <div className="max-w-4xl mx-auto p-6 font-sans">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-            MTG Library App
+            MTG Personal Library
           </h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500 dark:text-slate-400">
@@ -386,7 +386,7 @@ export default function App() {
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            🔍 Scryfall Search
+            🔍 MTG Search
           </button>
           <button
             onClick={() => setActiveTab('library')}
