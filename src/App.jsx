@@ -9,7 +9,7 @@ export default function App() {
   const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Check initial session & listen for auth state changes
+  // 1. Manage Auth State
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -24,7 +24,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch quantities whenever session updates
+  // 2. Fetch user's card collection whenever logged in
   useEffect(() => {
     if (session?.user?.id) {
       fetchLibraryQuantities(session.user.id);
@@ -55,6 +55,7 @@ export default function App() {
     setLibraryMap(qtyMap);
   };
 
+  // 3. Exact-match search via Scryfall API
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -73,6 +74,7 @@ export default function App() {
     }
   };
 
+  // 4. Upsert cards into public.user_cards
   const handleAddCard = async (card, isFoil) => {
     if (!session?.user?.id) return;
 
@@ -101,7 +103,7 @@ export default function App() {
         [scryfallId]: { reg: newReg, foil: newFoil },
       }));
     } else {
-      console.error('Error updating database:', error);
+      console.error('Error updating library:', error);
     }
   };
 
@@ -111,7 +113,6 @@ export default function App() {
     setSearchResults([]);
   };
 
-  // Render Login screen if user is not authenticated
   if (!session) {
     return <Login />;
   }
@@ -129,13 +130,13 @@ export default function App() {
             </span>
             <button
               onClick={handleSignOut}
-              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors cursor-pointer"
             >
               Sign Out
             </button>
           </div>
         </div>
-        
+
         <form onSubmit={handleSearch} className="mb-8 flex gap-3">
           <input
             type="text"
@@ -144,10 +145,10 @@ export default function App() {
             placeholder="Search card name (e.g. Sol Ring)..."
             className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50"
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -155,14 +156,15 @@ export default function App() {
 
         <div className="space-y-4">
           {searchResults.map((card) => {
-            const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+            const imgUrl =
+              card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
             const cleanId = String(card.id).trim().toLowerCase();
             const owned = libraryMap[cleanId] || { reg: 0, foil: 0 };
             const totalOwned = owned.reg + owned.foil;
 
             return (
-              <div 
-                key={card.id} 
+              <div
+                key={card.id}
                 className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 shadow-sm items-center"
               >
                 {imgUrl ? (
@@ -172,9 +174,11 @@ export default function App() {
                     No Image
                   </div>
                 )}
-                
+
                 <div className="flex-1">
-                  <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">{card.name}</h3>
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
+                    {card.name}
+                  </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{card.set_name}</p>
                   <div className="mt-3 text-sm">
                     {totalOwned > 0 ? (
@@ -190,13 +194,13 @@ export default function App() {
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => handleAddCard(card, false)}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                   >
                     + Reg
                   </button>
                   <button
                     onClick={() => handleAddCard(card, true)}
-                    className="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                   >
                     ✨ Foil
                   </button>
