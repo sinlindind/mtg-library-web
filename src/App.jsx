@@ -13,10 +13,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
   
-  // Flag to prevent autocomplete from reopening after a search submission
   const isSearchingRef = useRef(false);
 
-  // 1. Manage Auth State
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -31,14 +29,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. Fetch user's card collection whenever logged in
   useEffect(() => {
     if (session?.user?.id) {
       fetchLibraryQuantities(session.user.id);
     }
   }, [session]);
 
-  // 3. Scryfall Autocomplete API Call with Debounce
   useEffect(() => {
     const fetchAutocomplete = async () => {
       if (query.trim().length < 2) {
@@ -72,7 +68,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Close dropdown when clicking anywhere outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -166,7 +161,6 @@ export default function App() {
     executeSearch(cardName);
   };
 
-  // Adjust quantities up or down and handle database cleanup
   const handleUpdateQuantity = async (card, isFoil, delta) => {
     if (!session?.user?.id) return;
 
@@ -176,7 +170,7 @@ export default function App() {
     const newReg = isFoil ? current.reg : Math.max(0, current.reg + delta);
     const newFoil = isFoil ? Math.max(0, current.foil + delta) : current.foil;
 
-    // If both quantities are zero, delete the record from Supabase
+    // Delete record if total owned drops back to zero
     if (newReg === 0 && newFoil === 0) {
       const { error } = await supabase
         .from('user_cards')
@@ -184,19 +178,21 @@ export default function App() {
         .eq('user_id', session.user.id)
         .eq('scryfall_id', card.id);
 
-      if (!error) {
-        setLibraryMap((prev) => {
-          const updated = { ...prev };
-          delete updated[scryfallId];
-          return updated;
-        });
-      } else {
+      if (error) {
         console.error('Error removing card from library:', error);
+        alert(`Database Delete Error: ${error.message}`);
+        return;
       }
+
+      setLibraryMap((prev) => {
+        const updated = { ...prev };
+        delete updated[scryfallId];
+        return updated;
+      });
       return;
     }
 
-    // Otherwise update or insert the new quantities
+    // Upsert new values
     const { error } = await supabase
       .from('user_cards')
       .upsert(
@@ -211,13 +207,14 @@ export default function App() {
         { onConflict: 'user_id, scryfall_id' }
       );
 
-    if (!error) {
+    if (error) {
+      console.error('Error updating card quantity:', error);
+      alert(`Database Upsert Error: ${error.message}`);
+    } else {
       setLibraryMap((prev) => ({
         ...prev,
         [scryfallId]: { reg: newReg, foil: newFoil },
       }));
-    } else {
-      console.error('Error updating card quantity:', error);
     }
   };
 
@@ -323,15 +320,15 @@ export default function App() {
                     {card.name}
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{card.set_name}</p>
-                  <div className="mt-3 text-sm">
-                    {totalOwned > 0 ? (
+                  
+                  {/* Total owned badge only displays when quantity > 0 */}
+                  {totalOwned > 0 && (
+                    <div className="mt-3 text-sm">
                       <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full font-medium border border-emerald-200 dark:border-emerald-800">
                         📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
                       </span>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500">📦 In Library: 0x</span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Quantity Adjustment Control Groups */}
