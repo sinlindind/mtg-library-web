@@ -44,8 +44,10 @@ export default function App() {
     setLoading(true);
 
     try {
-      // Wrapping the search query in !"..." forces Scryfall to perform an exact name search
-      const res = await fetch(`https://api.scryfall.com/cards/search?q=!%22${encodeURIComponent(query.trim())}%22`);
+      // 'unique=prints' returns all printings/sets of the searched card
+      const res = await fetch(
+        `https://api.scryfall.com/cards/search?unique=prints&q=!%22${encodeURIComponent(query.trim())}%22`
+      );
       const json = await res.json();
       setSearchResults(json.data || []);
     } catch (err) {
