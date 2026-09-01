@@ -4,16 +4,24 @@ import Login from './Login.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'library'
+  
+  // Search View State
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [searchResults, setSearchResults] = useState([]);
-  const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
-  
   const isSearchingRef = useRef(false);
+
+  // Library View & Shared Data State
+  const [libraryMap, setLibraryMap] = useState({});
+  const [libraryList, setLibraryList] = useState([]);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState('');
+  const [tagInputs, setTagInputs] = useState({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,7 +39,7 @@ export default function App() {
 
   useEffect(() => {
     if (session?.user?.id) {
-      fetchLibraryQuantities(session.user.id);
+      fetchLibrary(session.user.id);
     }
   }, [session]);
 
@@ -60,7 +68,7 @@ export default function App() {
           setSelectedIndex(-1);
         }
       } catch (err) {
-        console.error('Autocomplete fetch error:', err);
+        console.error('Autocomplete error:', err);
       }
     };
 
@@ -79,28 +87,33 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchLibraryQuantities = async (userId) => {
+  const fetchLibrary = async (userId) => {
     const { data, error } = await supabase
       .from('user_cards')
-      .select('scryfall_id, reg_quantity, foil_quantity')
+      .select('id, scryfall_id, card_name, set_name, image_url, reg_quantity, foil_quantity, tags')
       .eq('user_id', userId);
 
     if (error) {
-      console.error('Error fetching library from Supabase:', error);
+      console.error('Error fetching library:', error);
       return;
     }
 
     const qtyMap = {};
-    (data || []).forEach((item) => {
+    const formattedData = data || [];
+
+    formattedData.forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
       if (cleanSid) {
         qtyMap[cleanSid] = {
           reg: item.reg_quantity || 0,
           foil: item.foil_quantity || 0,
+          tags: item.tags || [],
         };
       }
     });
+
     setLibraryMap(qtyMap);
+    setLibraryList(formattedData);
   };
 
   const executeSearch = async (searchQuery) => {
@@ -125,115 +138,132 @@ export default function App() {
     }
   };
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-
-    if (showDropdown && selectedIndex >= 0 && suggestions[selectedIndex]) {
-      const selectedName = suggestions[selectedIndex];
-      setQuery(selectedName);
-      executeSearch(selectedName);
-    } else {
-      executeSearch(query);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (!showDropdown || suggestions.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedIndex((prevIndex) =>
-        prevIndex < suggestions.length - 1 ? prevIndex + 1 : 0
-      );
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedIndex((prevIndex) =>
-        prevIndex > 0 ? prevIndex - 1 : suggestions.length - 1
-      );
-    } else if (e.key === 'Escape') {
-      setShowDropdown(false);
-      setSelectedIndex(-1);
-    }
-  };
-
-  const handleSelectSuggestion = (cardName) => {
-    setQuery(cardName);
-    executeSearch(cardName);
-  };
-
   const handleUpdateQuantity = async (card, isFoil, delta) => {
     if (!session?.user?.id) return;
 
-    const scryfallId = String(card.id).trim().toLowerCase();
-    const current = libraryMap[scryfallId] || { reg: 0, foil: 0 };
-    
+    const scryfallId = String(card.id || card.scryfall_id).trim().toLowerCase();
+    const current = libraryMap[scryfallId] || { reg: 0, foil: 0, tags: [] };
+    const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
+
     const newReg = isFoil ? current.reg : Math.max(0, current.reg + delta);
     const newFoil = isFoil ? Math.max(0, current.foil + delta) : current.foil;
 
-    // Delete record if total owned drops back to zero
     if (newReg === 0 && newFoil === 0) {
       const { error } = await supabase
         .from('user_cards')
         .delete()
         .eq('user_id', session.user.id)
-        .eq('scryfall_id', card.id);
+        .eq('scryfall_id', card.id || card.scryfall_id);
 
       if (error) {
-        console.error('Error removing card from library:', error);
-        alert(`Database Delete Error: ${error.message}`);
+        alert(`Delete Error: ${error.message}`);
         return;
       }
 
-      setLibraryMap((prev) => {
-        const updated = { ...prev };
-        delete updated[scryfallId];
-        return updated;
-      });
+      await fetchLibrary(session.user.id);
       return;
     }
 
-    // Upsert new values
     const { error } = await supabase
       .from('user_cards')
       .upsert(
         {
           user_id: session.user.id,
-          scryfall_id: card.id,
-          card_name: card.name,
+          scryfall_id: card.id || card.scryfall_id,
+          card_name: card.name || card.card_name,
           set_name: card.set_name,
+          image_url: imgUrl,
           reg_quantity: newReg,
           foil_quantity: newFoil,
+          tags: current.tags || [],
         },
         { onConflict: 'user_id, scryfall_id' }
       );
 
     if (error) {
-      console.error('Error updating card quantity:', error);
-      alert(`Database Upsert Error: ${error.message}`);
+      alert(`Upsert Error: ${error.message}`);
     } else {
-      setLibraryMap((prev) => ({
-        ...prev,
-        [scryfallId]: { reg: newReg, foil: newFoil },
-      }));
+      await fetchLibrary(session.user.id);
+    }
+  };
+
+  const handleAddTag = async (card, tagToAdd) => {
+    const tag = tagToAdd.trim().toLowerCase();
+    if (!tag || !session?.user?.id) return;
+
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+    const currentTags = libraryMap[scryfallId]?.tags || [];
+
+    if (currentTags.includes(tag)) {
+      setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
+      return;
+    }
+
+    const updatedTags = [...currentTags, tag];
+
+    const { error } = await supabase
+      .from('user_cards')
+      .update({ tags: updatedTags })
+      .eq('user_id', session.user.id)
+      .eq('scryfall_id', card.scryfall_id || card.id);
+
+    if (error) {
+      alert(`Tag Error: ${error.message}`);
+    } else {
+      setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
+      await fetchLibrary(session.user.id);
+    }
+  };
+
+  const handleRemoveTag = async (card, tagToRemove) => {
+    if (!session?.user?.id) return;
+
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+    const currentTags = libraryMap[scryfallId]?.tags || [];
+    const updatedTags = currentTags.filter((t) => t !== tagToRemove);
+
+    const { error } = await supabase
+      .from('user_cards')
+      .update({ tags: updatedTags })
+      .eq('user_id', session.user.id)
+      .eq('scryfall_id', card.scryfall_id || card.id);
+
+    if (error) {
+      alert(`Tag Delete Error: ${error.message}`);
+    } else {
+      await fetchLibrary(session.user.id);
     }
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setLibraryMap({});
+    setLibraryList([]);
     setSearchResults([]);
   };
 
-  if (!session) {
-    return <Login />;
-  }
+  if (!session) return <Login />;
+
+  const allAvailableTags = Array.from(
+    new Set(libraryList.flatMap((item) => item.tags || []))
+  );
+
+  const filteredLibrary = libraryList.filter((card) => {
+    const matchesSearch =
+      card.card_name?.toLowerCase().includes(librarySearch.toLowerCase()) ||
+      card.set_name?.toLowerCase().includes(librarySearch.toLowerCase());
+    const matchesTag =
+      !selectedTagFilter || (card.tags || []).includes(selectedTagFilter);
+
+    return matchesSearch && matchesTag;
+  });
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
       <div className="max-w-4xl mx-auto p-6 font-sans">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-            MTG Library Search
+            MTG Library App
           </h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500 dark:text-slate-400">
@@ -241,148 +271,250 @@ export default function App() {
             </span>
             <button
               onClick={handleSignOut}
-              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg cursor-pointer"
             >
               Sign Out
             </button>
           </div>
         </div>
 
-        {/* Search Bar with Autocomplete */}
-        <div ref={dropdownRef} className="relative mb-8">
-          <form onSubmit={handleSearchSubmit} className="flex gap-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                isSearchingRef.current = false;
-                setQuery(e.target.value);
-              }}
-              onKeyDown={handleKeyDown}
-              onFocus={() => suggestions.length > 0 && !isSearchingRef.current && setShowDropdown(true)}
-              placeholder="Search card name (e.g. Sol Ring)..."
-              className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </form>
-
-          {/* Dropdown Suggestions */}
-          {showDropdown && suggestions.length > 0 && (
-            <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((name, index) => (
-                <li
-                  key={index}
-                  onClick={() => handleSelectSuggestion(name)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  className={`px-4 py-2.5 cursor-pointer transition-colors border-b last:border-b-0 border-slate-100 dark:border-slate-700/50 ${
-                    index === selectedIndex
-                      ? 'bg-blue-100 dark:bg-slate-700 text-blue-900 dark:text-white font-medium'
-                      : 'hover:bg-blue-50 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  {name}
-                </li>
-              ))}
-            </ul>
-          )}
+        {/* Tab Navigation */}
+        <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700 mb-6">
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
+              activeTab === 'search'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            🔍 Scryfall Search
+          </button>
+          <button
+            onClick={() => setActiveTab('library')}
+            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
+              activeTab === 'library'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            📚 My Library ({libraryList.length})
+          </button>
         </div>
 
-        {/* Results View */}
-        <div className="space-y-4">
-          {searchResults.map((card) => {
-            const imgUrl =
-              card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
-            const cleanId = String(card.id).trim().toLowerCase();
-            const owned = libraryMap[cleanId] || { reg: 0, foil: 0 };
-            const totalOwned = owned.reg + owned.foil;
-
-            return (
-              <div
-                key={card.id}
-                className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 shadow-sm items-center"
+        {activeTab === 'search' ? (
+          <div>
+            {/* Search Input Controls */}
+            <div ref={dropdownRef} className="relative mb-8">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  executeSearch(query);
+                }}
+                className="flex gap-3"
               >
-                {imgUrl ? (
-                  <img src={imgUrl} alt={card.name} className="w-24 rounded-lg shadow-sm" />
-                ) : (
-                  <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">
-                    No Image
-                  </div>
-                )}
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => {
+                    isSearchingRef.current = false;
+                    setQuery(e.target.value);
+                  }}
+                  onFocus={() => suggestions.length > 0 && !isSearchingRef.current && setShowDropdown(true)}
+                  placeholder="Search card name (e.g. Sol Ring)..."
+                  className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer"
+                >
+                  {loading ? 'Searching...' : 'Search'}
+                </button>
+              </form>
 
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
-                    {card.name}
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{card.set_name}</p>
-                  
-                  {/* Total owned badge only displays when quantity > 0 */}
-                  {totalOwned > 0 && (
-                    <div className="mt-3 text-sm">
-                      <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full font-medium border border-emerald-200 dark:border-emerald-800">
-                        📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
-                      </span>
+              {showDropdown && suggestions.length > 0 && (
+                <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {suggestions.map((name, index) => (
+                    <li
+                      key={index}
+                      onClick={() => {
+                        setQuery(name);
+                        executeSearch(name);
+                      }}
+                      className="px-4 py-2.5 cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
+                    >
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Results Grid */}
+            <div className="space-y-4">
+              {searchResults.map((card) => {
+                const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+                const cleanId = String(card.id).trim().toLowerCase();
+                const owned = libraryMap[cleanId] || { reg: 0, foil: 0 };
+                const totalOwned = owned.reg + owned.foil;
+
+                return (
+                  <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-center">
+                    {imgUrl ? (
+                      <img src={imgUrl} alt={card.name} className="w-24 rounded-lg" />
+                    ) : (
+                      <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                    )}
+
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg">{card.name}</h3>
+                      <p className="text-sm text-slate-500">{card.set_name}</p>
+                      {totalOwned > 0 && (
+                        <span className="inline-block mt-3 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-sm border border-emerald-200 dark:border-emerald-800">
+                          📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
+                        </span>
+                      )}
                     </div>
-                  )}
+
+                    <div className="flex flex-col gap-3 min-w-[130px]">
+                      <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg">
+                        <span className="text-xs font-semibold ml-1">Reg</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={owned.reg === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
+                          <span className="w-6 text-center text-xs font-bold">{owned.reg}</span>
+                          <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-7 h-7 bg-blue-600 text-white rounded font-bold cursor-pointer">+</button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg">
+                        <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={owned.foil === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
+                          <span className="w-6 text-center text-xs font-bold">{owned.foil}</span>
+                          <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-7 h-7 bg-amber-500 text-white rounded font-bold cursor-pointer">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* Library Search & Tag Filter Inputs */}
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <input
+                type="text"
+                value={librarySearch}
+                onChange={(e) => setLibrarySearch(e.target.value)}
+                placeholder="Search collection by name..."
+                className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              />
+
+              <select
+                value={selectedTagFilter}
+                onChange={(e) => setSelectedTagFilter(e.target.value)}
+                className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 min-w-[180px]"
+              >
+                <option value="">All Tags</option>
+                {allAvailableTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    🏷️ {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Library List Grid */}
+            <div className="space-y-4">
+              {filteredLibrary.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  No cards found matching your collection criteria.
                 </div>
+              ) : (
+                filteredLibrary.map((card) => {
+                  const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+                  const currentTags = card.tags || [];
 
-                {/* Quantity Adjustment Control Groups */}
-                <div className="flex flex-col gap-3 min-w-[130px]">
-                  {/* Regular Quantity Stepper */}
-                  <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg border border-slate-200 dark:border-slate-600">
-                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 ml-1">Reg</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleUpdateQuantity(card, false, -1)}
-                        disabled={owned.reg === 0}
-                        className="w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded font-bold text-sm shadow-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <span className="w-6 text-center text-xs font-bold text-slate-800 dark:text-slate-100">
-                        {owned.reg}
-                      </span>
-                      <button
-                        onClick={() => handleUpdateQuantity(card, false, 1)}
-                        className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
+                  return (
+                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
+                      {card.image_url ? (
+                        <img src={card.image_url} alt={card.card_name} className="w-24 rounded-lg" />
+                      ) : (
+                        <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                      )}
 
-                  {/* Foil Quantity Stepper */}
-                  <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60">
-                    <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleUpdateQuantity(card, true, -1)}
-                        disabled={owned.foil === 0}
-                        className="w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded font-bold text-sm shadow-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <span className="w-6 text-center text-xs font-bold text-amber-900 dark:text-amber-200">
-                        {owned.foil}
-                      </span>
-                      <button
-                        onClick={() => handleUpdateQuantity(card, true, 1)}
-                        className="w-7 h-7 flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
-                      >
-                        +
-                      </button>
+                      <div className="flex-1 space-y-2">
+                        <div>
+                          <h3 className="font-bold text-lg">{card.card_name}</h3>
+                          <p className="text-sm text-slate-500">{card.set_name}</p>
+                        </div>
+
+                        {/* Tag Chips */}
+                        <div className="flex flex-wrap gap-2 items-center pt-1">
+                          {currentTags.map((tag) => (
+                            <span key={tag} className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-full text-xs font-medium">
+                              🏷️ {tag}
+                              <button
+                                onClick={() => handleRemoveTag(card, tag)}
+                                className="text-slate-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+
+                          {/* Add Tag Inline Form */}
+                          <input
+                            type="text"
+                            placeholder="+ add tag"
+                            value={tagInputs[scryfallId] || ''}
+                            onChange={(e) =>
+                              setTagInputs((prev) => ({
+                                ...prev,
+                                [scryfallId]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddTag(card, tagInputs[scryfallId] || '');
+                              }
+                            }}
+                            className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-24"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Quantity Controls */}
+                      <div className="flex flex-col gap-3 min-w-[130px]">
+                        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg">
+                          <span className="text-xs font-semibold ml-1">Reg</span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={card.reg_quantity === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
+                            <span className="w-6 text-center text-xs font-bold">{card.reg_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-7 h-7 bg-blue-600 text-white rounded font-bold cursor-pointer">+</button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg">
+                          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={card.foil_quantity === 0} className="w-7 h-7 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer">-</button>
+                            <span className="w-6 text-center text-xs font-bold">{card.foil_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-7 h-7 bg-amber-500 text-white rounded font-bold cursor-pointer">+</button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
