@@ -12,6 +12,9 @@ export default function App() {
   const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+  
+  // Flag to prevent autocomplete from reopening after a search submission
+  const isSearchingRef = useRef(false);
 
   // 1. Manage Auth State
   useEffect(() => {
@@ -44,14 +47,24 @@ export default function App() {
         return;
       }
 
+      // Skip fetching if search was just submitted
+      if (isSearchingRef.current) {
+        isSearchingRef.current = false;
+        return;
+      }
+
       try {
         const res = await fetch(
           `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query.trim())}`
         );
         const json = await res.json();
-        setSuggestions(json.data || []);
-        setShowDropdown(true);
-        setSelectedIndex(-1);
+        
+        // Double check flag before opening
+        if (!isSearchingRef.current) {
+          setSuggestions(json.data || []);
+          setShowDropdown(true);
+          setSelectedIndex(-1);
+        }
       } catch (err) {
         console.error('Autocomplete fetch error:', err);
       }
@@ -99,9 +112,13 @@ export default function App() {
 
   const executeSearch = async (searchQuery) => {
     if (!searchQuery.trim()) return;
-    setLoading(true);
+    
+    // Set flag and immediately hide dropdown
+    isSearchingRef.current = true;
     setShowDropdown(false);
+    setSuggestions([]);
     setSelectedIndex(-1);
+    setLoading(true);
 
     try {
       const res = await fetch(
@@ -118,7 +135,7 @@ export default function App() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setShowDropdown(false);
+
     if (showDropdown && selectedIndex >= 0 && suggestions[selectedIndex]) {
       const selectedName = suggestions[selectedIndex];
       setQuery(selectedName);
@@ -148,7 +165,6 @@ export default function App() {
   };
 
   const handleSelectSuggestion = (cardName) => {
-    setShowDropdown(false);
     setQuery(cardName);
     executeSearch(cardName);
   };
@@ -221,9 +237,12 @@ export default function App() {
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                isSearchingRef.current = false;
+                setQuery(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
-              onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+              onFocus={() => suggestions.length > 0 && !isSearchingRef.current && setShowDropdown(true)}
               placeholder="Search card name (e.g. Sol Ring)..."
               className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
