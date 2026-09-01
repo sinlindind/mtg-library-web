@@ -44,7 +44,8 @@ export default function App() {
     setLoading(true);
 
     try {
-      const res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`);
+      // Wrapping the search query in !"..." forces Scryfall to perform an exact name search
+      const res = await fetch(`https://api.scryfall.com/cards/search?q=!%22${encodeURIComponent(query.trim())}%22`);
       const json = await res.json();
       setSearchResults(json.data || []);
     } catch (err) {
