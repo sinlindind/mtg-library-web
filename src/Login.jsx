@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 
 export default function Login() {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [view, setView] = useState('signin'); // 'signin', 'signup', or 'reset'
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -16,14 +16,13 @@ export default function Login() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (isSignUp) {
-      // Sign Up Flow
+    if (view === 'signup') {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password,
         options: {
           data: {
-            username: username.trim(), // Sent to raw_user_meta_data for trigger
+            username: username.trim(),
           },
         },
       });
@@ -33,8 +32,7 @@ export default function Login() {
       } else {
         setSuccessMessage('Account created! Check your email to confirm registration.');
       }
-    } else {
-      // Sign In Flow
+    } else if (view === 'signin') {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
@@ -43,13 +41,23 @@ export default function Login() {
       if (error) {
         setErrorMessage(error.message);
       }
+    } else if (view === 'reset') {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setSuccessMessage('Password reset link sent! Check your email inbox.');
+      }
     }
 
     setLoading(false);
   };
 
-  const toggleMode = () => {
-    setIsSignUp(!isSignUp);
+  const changeView = (newView) => {
+    setView(newView);
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -58,7 +66,9 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-800 p-8 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
         <h2 className="text-2xl font-bold mb-6 text-center text-slate-800 dark:text-slate-100">
-          {isSignUp ? 'Create Account' : 'Sign In'}
+          {view === 'signup' && 'Create Account'}
+          {view === 'signin' && 'Sign In'}
+          {view === 'reset' && 'Reset Password'}
         </h2>
 
         {errorMessage && (
@@ -74,7 +84,7 @@ export default function Login() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isSignUp && (
+          {view === 'signup' && (
             <div>
               <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
                 Username
@@ -82,7 +92,7 @@ export default function Login() {
               <input
                 type="text"
                 value={username}
-                required={isSignUp}
+                required={view === 'signup'}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="johndoe"
@@ -104,44 +114,74 @@ export default function Login() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              required
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
-          </div>
+          {view !== 'reset' && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Password
+                </label>
+                {view === 'signin' && (
+                  <button
+                    type="button"
+                    onClick={() => changeView('reset')}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                value={password}
+                required={view !== 'reset'}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50"
           >
-            {loading
-              ? isSignUp
-                ? 'Creating account...'
-                : 'Signing in...'
-              : isSignUp
-              ? 'Sign Up'
-              : 'Sign In'}
+            {loading ? (
+              'Processing...'
+            ) : (
+              <>
+                {view === 'signup' && 'Sign Up'}
+                {view === 'signin' && 'Sign In'}
+                {view === 'reset' && 'Send Reset Link'}
+              </>
+            )}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            type="button"
-            onClick={toggleMode}
-            className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-          >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
-          </button>
+        <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400 space-y-2">
+          {view === 'reset' ? (
+            <div>
+              Remember your password?{' '}
+              <button
+                type="button"
+                onClick={() => changeView('signin')}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                Sign In
+              </button>
+            </div>
+          ) : (
+            <div>
+              {view === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button
+                type="button"
+                onClick={() => changeView(view === 'signup' ? 'signin' : 'signup')}
+                className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                {view === 'signup' ? 'Sign In' : 'Sign Up'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
