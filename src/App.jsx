@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Login from './Login.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef(null);
 
   // 1. Manage Auth State
   useEffect(() => {
@@ -30,6 +33,41 @@ export default function App() {
       fetchLibraryQuantities(session.user.id);
     }
   }, [session]);
+
+  // 3. Scryfall Autocomplete API Call with Debounce
+  useEffect(() => {
+    const fetchAutocomplete = async () => {
+      if (query.trim().length < 2) {
+        setSuggestions([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query.trim())}`
+        );
+        const json = await res.json();
+        setSuggestions(json.data || []);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error('Autocomplete fetch error:', err);
+      }
+    };
+
+    const timer = setTimeout(fetchAutocomplete, 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchLibraryQuantities = async (userId) => {
     const { data, error } = await supabase
@@ -55,15 +93,15 @@ export default function App() {
     setLibraryMap(qtyMap);
   };
 
-  // 3. Exact-match search via Scryfall API
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  // Execute full search on submission or suggestion click
+  const executeSearch = async (searchQuery) => {
+    if (!searchQuery.trim()) return;
     setLoading(true);
+    setShowDropdown(false);
 
     try {
       const res = await fetch(
-        `https://api.scryfall.com/cards/search?unique=prints&q=!%22${encodeURIComponent(query.trim())}%22`
+        `https://api.scryfall.com/cards/search?unique=prints&q=!%22${encodeURIComponent(searchQuery.trim())}%22`
       );
       const json = await res.json();
       setSearchResults(json.data || []);
@@ -74,7 +112,17 @@ export default function App() {
     }
   };
 
-  // 4. Upsert cards into public.user_cards
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    executeSearch(query);
+  };
+
+  const handleSelectSuggestion = (cardName) => {
+    setQuery(cardName);
+    executeSearch(cardName);
+  };
+
+  // Upsert cards into public.user_cards
   const handleAddCard = async (card, isFoil) => {
     if (!session?.user?.id) return;
 
@@ -137,23 +185,43 @@ export default function App() {
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="mb-8 flex gap-3">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search card name (e.g. Sol Ring)..."
-            className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
-        </form>
+        {/* Search Bar with Autocomplete */}
+        <div ref={dropdownRef} className="relative mb-8">
+          <form onSubmit={handleSearchSubmit} className="flex gap-3">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+              placeholder="Search card name (e.g. Sol Ring)..."
+              className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg shadow transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+          </form>
 
+          {/* Dropdown Suggestions */}
+          {showDropdown && suggestions.length > 0 && (
+            <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {suggestions.map((name, index) => (
+                <li
+                  key={index}
+                  onClick={() => handleSelectSuggestion(name)}
+                  className="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-700/60 cursor-pointer text-slate-800 dark:text-slate-200 transition-colors border-b last:border-b-0 border-slate-100 dark:border-slate-700/50"
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Results View */}
         <div className="space-y-4">
           {searchResults.map((card) => {
             const imgUrl =
