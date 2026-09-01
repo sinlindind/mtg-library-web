@@ -47,7 +47,6 @@ export default function App() {
         return;
       }
 
-      // Skip fetching if search was just submitted
       if (isSearchingRef.current) {
         isSearchingRef.current = false;
         return;
@@ -59,7 +58,6 @@ export default function App() {
         );
         const json = await res.json();
         
-        // Double check flag before opening
         if (!isSearchingRef.current) {
           setSuggestions(json.data || []);
           setShowDropdown(true);
@@ -113,7 +111,6 @@ export default function App() {
   const executeSearch = async (searchQuery) => {
     if (!searchQuery.trim()) return;
     
-    // Set flag and immediately hide dropdown
     isSearchingRef.current = true;
     setShowDropdown(false);
     setSuggestions([]);
@@ -169,14 +166,37 @@ export default function App() {
     executeSearch(cardName);
   };
 
-  const handleAddCard = async (card, isFoil) => {
+  // Adjust quantities up or down and handle database cleanup
+  const handleUpdateQuantity = async (card, isFoil, delta) => {
     if (!session?.user?.id) return;
 
     const scryfallId = String(card.id).trim().toLowerCase();
     const current = libraryMap[scryfallId] || { reg: 0, foil: 0 };
-    const newReg = isFoil ? current.reg : current.reg + 1;
-    const newFoil = isFoil ? current.foil + 1 : current.foil;
+    
+    const newReg = isFoil ? current.reg : Math.max(0, current.reg + delta);
+    const newFoil = isFoil ? Math.max(0, current.foil + delta) : current.foil;
 
+    // If both quantities are zero, delete the record from Supabase
+    if (newReg === 0 && newFoil === 0) {
+      const { error } = await supabase
+        .from('user_cards')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('scryfall_id', card.id);
+
+      if (!error) {
+        setLibraryMap((prev) => {
+          const updated = { ...prev };
+          delete updated[scryfallId];
+          return updated;
+        });
+      } else {
+        console.error('Error removing card from library:', error);
+      }
+      return;
+    }
+
+    // Otherwise update or insert the new quantities
     const { error } = await supabase
       .from('user_cards')
       .upsert(
@@ -197,7 +217,7 @@ export default function App() {
         [scryfallId]: { reg: newReg, foil: newFoil },
       }));
     } else {
-      console.error('Error updating library:', error);
+      console.error('Error updating card quantity:', error);
     }
   };
 
@@ -314,19 +334,53 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => handleAddCard(card, false)}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                  >
-                    + Reg
-                  </button>
-                  <button
-                    onClick={() => handleAddCard(card, true)}
-                    className="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                  >
-                    ✨ Foil
-                  </button>
+                {/* Quantity Adjustment Control Groups */}
+                <div className="flex flex-col gap-3 min-w-[130px]">
+                  {/* Regular Quantity Stepper */}
+                  <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-1.5 rounded-lg border border-slate-200 dark:border-slate-600">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 ml-1">Reg</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleUpdateQuantity(card, false, -1)}
+                        disabled={owned.reg === 0}
+                        className="w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded font-bold text-sm shadow-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {owned.reg}
+                      </span>
+                      <button
+                        onClick={() => handleUpdateQuantity(card, false, 1)}
+                        className="w-7 h-7 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Foil Quantity Stepper */}
+                  <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60">
+                    <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleUpdateQuantity(card, true, -1)}
+                        disabled={owned.foil === 0}
+                        className="w-7 h-7 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded font-bold text-sm shadow-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center text-xs font-bold text-amber-900 dark:text-amber-200">
+                        {owned.foil}
+                      </span>
+                      <button
+                        onClick={() => handleUpdateQuantity(card, true, 1)}
+                        className="w-7 h-7 flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
