@@ -7,6 +7,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [searchResults, setSearchResults] = useState([]);
   const [libraryMap, setLibraryMap] = useState({});
   const [loading, setLoading] = useState(false);
@@ -39,6 +40,7 @@ export default function App() {
     const fetchAutocomplete = async () => {
       if (query.trim().length < 2) {
         setSuggestions([]);
+        setSelectedIndex(-1);
         return;
       }
 
@@ -49,6 +51,7 @@ export default function App() {
         const json = await res.json();
         setSuggestions(json.data || []);
         setShowDropdown(true);
+        setSelectedIndex(-1); // Reset highlight when new suggestions arrive
       } catch (err) {
         console.error('Autocomplete fetch error:', err);
       }
@@ -63,6 +66,7 @@ export default function App() {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false);
+        setSelectedIndex(-1);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -98,6 +102,7 @@ export default function App() {
     if (!searchQuery.trim()) return;
     setLoading(true);
     setShowDropdown(false);
+    setSelectedIndex(-1);
 
     try {
       const res = await fetch(
@@ -114,7 +119,32 @@ export default function App() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    executeSearch(query);
+    if (showDropdown && selectedIndex >= 0 && suggestions[selectedIndex]) {
+      const selectedName = suggestions[selectedIndex];
+      setQuery(selectedName);
+      executeSearch(selectedName);
+    } else {
+      executeSearch(query);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showDropdown || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) =>
+        prevIndex < suggestions.length - 1 ? prevIndex + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) =>
+        prevIndex > 0 ? prevIndex - 1 : suggestions.length - 1
+      );
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    }
   };
 
   const handleSelectSuggestion = (cardName) => {
@@ -192,6 +222,7 @@ export default function App() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
               onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
               placeholder="Search card name (e.g. Sol Ring)..."
               className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -212,7 +243,12 @@ export default function App() {
                 <li
                   key={index}
                   onClick={() => handleSelectSuggestion(name)}
-                  className="px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-slate-700/60 cursor-pointer text-slate-800 dark:text-slate-200 transition-colors border-b last:border-b-0 border-slate-100 dark:border-slate-700/50"
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={`px-4 py-2.5 cursor-pointer transition-colors border-b last:border-b-0 border-slate-100 dark:border-slate-700/50 ${
+                    index === selectedIndex
+                      ? 'bg-blue-100 dark:bg-slate-700 text-blue-900 dark:text-white font-medium'
+                      : 'hover:bg-blue-50 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200'
+                  }`}
                 >
                   {name}
                 </li>
