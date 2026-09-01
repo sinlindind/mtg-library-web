@@ -28,6 +28,9 @@ export default function App() {
   const [selectedTagFilter, setSelectedTagFilter] = useState('');
   const [tagInputs, setTagInputs] = useState({});
 
+  // Full-Size Image Modal State
+  const [previewImage, setPreviewImage] = useState(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -459,17 +462,24 @@ export default function App() {
             <div className="space-y-4">
               {searchResults.map((card) => {
                 const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+                const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
                 const cleanId = String(card.id).trim().toLowerCase();
                 const owned = libraryMap[cleanId] || { reg: 0, foil: 0 };
                 const totalOwned = owned.reg + owned.foil;
                 const isWishlisted = !!wishlistMap[cleanId];
 
                 return (
-                  <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-center">
+                  <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                     {imgUrl ? (
-                      <img src={imgUrl} alt={card.name} className="w-24 rounded-lg" />
+                      <img 
+                        src={imgUrl} 
+                        alt={card.name} 
+                        onClick={() => setPreviewImage(highResUrl)}
+                        className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                        title="Click to view full resolution"
+                      />
                     ) : (
-                      <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                      <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
                     )}
 
                     <div className="flex-1">
@@ -553,9 +563,15 @@ export default function App() {
                   return (
                     <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                       {card.image_url ? (
-                        <img src={card.image_url} alt={card.card_name} className="w-24 rounded-lg" />
+                        <img 
+                          src={card.image_url} 
+                          alt={card.card_name} 
+                          onClick={() => setPreviewImage(card.image_url)}
+                          className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                          title="Click to view full resolution"
+                        />
                       ) : (
-                        <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                        <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
                       )}
 
                       <div className="flex-1 space-y-2">
@@ -644,11 +660,17 @@ export default function App() {
                   const totalOwned = owned.reg + owned.foil;
 
                   return (
-                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-center">
+                    <div key={card.id} className="flex gap-4 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
                       {card.image_url ? (
-                        <img src={card.image_url} alt={card.card_name} className="w-24 rounded-lg" />
+                        <img 
+                          src={card.image_url} 
+                          alt={card.card_name} 
+                          onClick={() => setPreviewImage(card.image_url)}
+                          className="w-40 rounded-lg cursor-pointer transition-transform hover:scale-105 hover:shadow-lg" 
+                          title="Click to view full resolution"
+                        />
                       ) : (
-                        <div className="w-24 h-36 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
+                        <div className="w-40 h-56 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs text-slate-400">No Image</div>
                       )}
 
                       <div className="flex-1">
@@ -675,7 +697,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Wishlist Quantity Selector */}
                       <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[130px]">
                         <span className="text-xs font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
                         <div className="flex items-center gap-1">
@@ -704,6 +725,28 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Full-screen Image Preview Overlay */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-pointer"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-md w-full">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-10 right-0 text-white text-3xl font-bold hover:text-red-400 cursor-pointer"
+            >
+              ✕
+            </button>
+            <img 
+              src={previewImage} 
+              alt="Full Preview" 
+              className="w-full h-auto rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
