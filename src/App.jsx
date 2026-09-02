@@ -168,6 +168,32 @@ export default function App() {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (!showDropdown || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) =>
+        prevIndex < suggestions.length - 1 ? prevIndex + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prevIndex) =>
+        prevIndex > 0 ? prevIndex - 1 : suggestions.length - 1
+      );
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        e.preventDefault();
+        const selectedName = suggestions[selectedIndex];
+        setQuery(selectedName);
+        executeSearch(selectedName);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setSelectedIndex(-1);
+    }
+  };
+
   const handleUpdateQuantity = async (card, isFoil, delta) => {
     if (!session?.user?.id) return;
 
@@ -417,7 +443,13 @@ export default function App() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  executeSearch(query);
+                  if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+                    const selectedName = suggestions[selectedIndex];
+                    setQuery(selectedName);
+                    executeSearch(selectedName);
+                  } else {
+                    executeSearch(query);
+                  }
                 }}
                 className="flex gap-3"
               >
@@ -428,6 +460,7 @@ export default function App() {
                     isSearchingRef.current = false;
                     setQuery(e.target.value);
                   }}
+                  onKeyDown={handleKeyDown}
                   onFocus={() => suggestions.length > 0 && !isSearchingRef.current && setShowDropdown(true)}
                   placeholder="Search card name (e.g. Sol Ring)..."
                   className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
@@ -450,7 +483,12 @@ export default function App() {
                         setQuery(name);
                         executeSearch(name);
                       }}
-                      className="px-4 py-2.5 cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      className={`px-4 py-2.5 cursor-pointer text-slate-800 dark:text-slate-200 ${
+                        selectedIndex === index
+                          ? 'bg-blue-100 dark:bg-slate-700 font-semibold'
+                          : 'hover:bg-blue-50 dark:hover:bg-slate-700'
+                      }`}
                     >
                       {name}
                     </li>
