@@ -344,7 +344,7 @@ export default function App() {
 
     const updatedTags = [...currentTags, tag];
 
-    // Optimistically update local library list
+    // Optimistically update both list and map state locally
     setLibraryList((prev) =>
       prev.map((item) =>
         String(item.scryfall_id).trim().toLowerCase() === scryfallId
@@ -352,6 +352,16 @@ export default function App() {
           : item
       )
     );
+
+    setLibraryMap((prev) => ({
+      ...prev,
+      [scryfallId]: {
+        ...prev[scryfallId],
+        tags: updatedTags,
+      },
+    }));
+
+    setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
 
     const { error } = await supabase
       .from('user_cards')
@@ -361,9 +371,6 @@ export default function App() {
 
     if (error) {
       alert(`Tag Error: ${error.message}`);
-      await fetchLibrary(session.user.id);
-    } else {
-      setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
       await fetchLibrary(session.user.id);
     }
   };
@@ -375,7 +382,7 @@ export default function App() {
     const currentTags = libraryMap[scryfallId]?.tags || card.tags || [];
     const updatedTags = currentTags.filter((t) => t !== tagToRemove);
 
-    // Optimistically update local library list
+    // Optimistically update both list and map state locally
     setLibraryList((prev) =>
       prev.map((item) =>
         String(item.scryfall_id).trim().toLowerCase() === scryfallId
@@ -383,6 +390,14 @@ export default function App() {
           : item
       )
     );
+
+    setLibraryMap((prev) => ({
+      ...prev,
+      [scryfallId]: {
+        ...prev[scryfallId],
+        tags: updatedTags,
+      },
+    }));
 
     const { error } = await supabase
       .from('user_cards')
@@ -392,8 +407,6 @@ export default function App() {
 
     if (error) {
       alert(`Tag Delete Error: ${error.message}`);
-      await fetchLibrary(session.user.id);
-    } else {
       await fetchLibrary(session.user.id);
     }
   };
