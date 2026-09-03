@@ -491,14 +491,10 @@ export default function App() {
   };
 
   // FIXED TAG FILTER LOGIC HERE
-  // Add logs inside getFilteredLibrary
   const getFilteredLibrary = () => {
-    console.log("--- FILTER CHECK START ---");
-    console.log("selectedTagFilter RAW:", JSON.stringify(selectedTagFilter));
-    console.log("Total libraryList count:", libraryList.length);
-
-    const results = libraryList.filter((card) => {
-      const cardTags = normalizeTags(card.tags);
+    return libraryList.filter((card) => {
+      // Tags are already normalized during fetchLibrary, fallback to empty array
+      const cardTags = Array.isArray(card.tags) ? card.tags : normalizeTags(card.tags);
       const searchLower = librarySearch.trim().toLowerCase();
       
       const matchesSearch =
@@ -514,24 +510,8 @@ export default function App() {
         cleanFilter === '__all__' ||
         cardTags.includes(cleanFilter);
 
-      if (card.card_name?.toLowerCase().includes('absolute grace')) {
-        console.log("CARD MATCH DEBUG [Absolute Grace]:", {
-          card_name: card.card_name,
-          raw_tags: card.tags,
-          normalized_tags: cardTags,
-          cleanFilter: cleanFilter,
-          matchesSearch: matchesSearch,
-          matchesTag: matchesTag,
-          will_show: matchesSearch && matchesTag
-        });
-      }
-
       return matchesSearch && matchesTag;
     });
-
-    console.log("Filtered library count returned:", results.length);
-    console.log("--- FILTER CHECK END ---");
-    return results;
   };
 
   const handleExecuteExport = async () => {
