@@ -148,6 +148,8 @@ export default function App() {
   }, []);
 
   const fetchLibrary = async (userId) => {
+    if (!userId) return;
+
     console.log('Fetching library for user:', userId);
     const { data, error } = await supabase
       .from('user_cards')
@@ -160,22 +162,33 @@ export default function App() {
       return;
     }
 
-    // Check if Absolute Grace exists in the raw database query result
-    const graceCheck = (data || []).find(c => 
-      c.card_name?.toLowerCase().includes('absolute grace')
-    );
-    
-    if (graceCheck) {
-      console.log('✅ Absolute Grace FOUND in Supabase query:', graceCheck);
-    } else {
-      console.log('❌ Absolute Grace NOT FOUND in Supabase query. Total rows returned:', data?.length);
-    }
+    // Sanitize and normalize card data once at the boundary
+    const sanitizedData = (data || []).map((item) => {
+      let parsedTags = [];
 
-    const sanitizedData = (data || []).map((item) => ({
-      ...item,
-      tags: normalizeTags(item.tags),
-    }));
+      // Parse stringified JSON or comma-separated tags if needed
+      if (Array.isArray(item.tags)) {
+        parsedTags = item.tags;
+      } else if (typeof item.tags === 'string') {
+        try {
+          parsedTags = JSON.parse(item.tags);
+        } catch {
+          parsedTags = item.tags.split(',');
+        }
+      }
 
+      // Clean, trim, and lowercase all tag values
+      const cleanTags = (Array.isArray(parsedTags) ? parsedTags : [])
+        .map((t) => String(t).trim().toLowerCase())
+        .filter(Boolean);
+
+      return {
+        ...item,
+        tags: cleanTags,
+      };
+    });
+
+    // Build quantity lookup map
     const qtyMap = {};
     sanitizedData.forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
@@ -188,6 +201,17 @@ export default function App() {
       }
     });
 
+    // Check state before setting
+    const graceCheck = sanitizedData.find((c) =>
+      c.card_name?.toLowerCase().includes('absolute grace')
+    );
+    if (graceCheck) {
+      console.log('✅ Absolute Grace successfully loaded into state:', graceCheck);
+    } else {
+      console.log('❌ Absolute Grace not found in database response.');
+    }
+
+    // Update React state
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
   };
@@ -502,30 +526,30 @@ export default function App() {
 
   // FIXED TAG FILTER LOGIC HERE
   const getFilteredLibrary = () => {
+    const searchLower = (librarySearch || '').trim().toLowerCase();
+    
+    // Explicitly check for empty/default tag filter values
+    const activeTagFilter = (selectedTagFilter || '').trim().toLowerCase();
+    const isAllTags = 
+      !activeTagFilter || 
+      activeTagFilter === 'all tags' || 
+      activeTagFilter === 'all' || 
+      activeTagFilter === '__all__';
+
     return libraryList.filter((card) => {
-      if (card.card_name?.toLowerCase().includes('absolute grace')) {
-        console.log('Absolute Grace raw card:', card);
-        console.log('Current search term:', `"${librarySearch}"`);
-        console.log('Current selectedTagFilter:', `"${selectedTagFilter}"`);
-      }
-      // Tags are already normalized during fetchLibrary, fallback to empty array
-      const cardTags = Array.isArray(card.tags) ? card.tags : normalizeTags(card.tags);
-      const searchLower = librarySearch.trim().toLowerCase();
-      
+      // 1. Search Filter
       const matchesSearch =
         !searchLower ||
         card.card_name?.toLowerCase().includes(searchLower) ||
         card.set_name?.toLowerCase().includes(searchLower);
 
-      const cleanFilter = (selectedTagFilter || '').trim().toLowerCase();
-      
-      const matchesTag =
-        cleanFilter === '' ||
-        cleanFilter === 'all tags' ||
-        cleanFilter === '__all__' ||
-        cardTags.includes(cleanFilter);
+      // 2. Tag Filter
+      if (!matchesSearch) return false;
+      if (isAllTags) return true; // Show ALL cards regardless of tags
 
-      return matchesSearch && matchesTag;
+      // If filtering by a specific tag:
+      const cardTags = Array.isArray(card.tags) ? card.tags : [];
+      return cardTags.includes(activeTagFilter);
     });
   };
 
