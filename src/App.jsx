@@ -77,16 +77,15 @@ export default function App() {
 
   const [previewImage, setPreviewImage] = useState(null);
 
+  // Clean Auth listener (prevents triple re-fetching seen in console)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Current Session:', session);
       setSession(session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth State Event:', _event, session);
       setSession(session);
     });
 
@@ -98,7 +97,7 @@ export default function App() {
       fetchLibrary(session.user.id);
       fetchWishlist(session.user.id);
     }
-  }, [session]);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     const fetchAutocomplete = async () => {
@@ -265,8 +264,6 @@ export default function App() {
 
     const newReg = isFoil ? current.reg : Math.max(0, current.reg + delta);
     const newFoil = isFoil ? Math.max(0, current.foil + delta) : current.foil;
-
-    console.log(`Updating ${card.name || card.card_name}: Reg ${newReg}, Foil ${newFoil}`);
 
     if (newReg === 0 && newFoil === 0) {
       const { error } = await supabase
@@ -489,6 +486,7 @@ export default function App() {
     return scryfallDataMap;
   };
 
+  // FIXED TAG FILTER LOGIC HERE
   const getFilteredLibrary = () => {
     return libraryList.filter((card) => {
       const cardTags = normalizeTags(card.tags);
@@ -500,7 +498,13 @@ export default function App() {
         card.set_name?.toLowerCase().includes(searchLower);
 
       const cleanFilter = (selectedTagFilter || '').trim().toLowerCase();
-      const matchesTag = cleanFilter === '' || cardTags.includes(cleanFilter);
+      
+      // Fix: Treat empty string OR 'all tags' / '__all__' as showing all cards
+      const matchesTag =
+        cleanFilter === '' ||
+        cleanFilter === 'all tags' ||
+        cleanFilter === '__all__' ||
+        cardTags.includes(cleanFilter);
 
       return matchesSearch && matchesTag;
     });
@@ -875,6 +879,7 @@ export default function App() {
                 className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
               />
 
+              {/* Tag Dropdown with explicit empty value for 'All Tags' */}
               <select
                 value={selectedTagFilter}
                 onChange={(e) => setSelectedTagFilter(e.target.value)}
