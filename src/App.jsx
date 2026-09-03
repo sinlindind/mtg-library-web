@@ -493,6 +493,11 @@ export default function App() {
   // FIXED TAG FILTER LOGIC HERE
   const getFilteredLibrary = () => {
     return libraryList.filter((card) => {
+      if (card.card_name?.toLowerCase().includes('absolute grace')) {
+        console.log('Absolute Grace raw card:', card);
+        console.log('Current search term:', `"${librarySearch}"`);
+        console.log('Current selectedTagFilter:', `"${selectedTagFilter}"`);
+      }
       // Tags are already normalized during fetchLibrary, fallback to empty array
       const cardTags = Array.isArray(card.tags) ? card.tags : normalizeTags(card.tags);
       const searchLower = librarySearch.trim().toLowerCase();
