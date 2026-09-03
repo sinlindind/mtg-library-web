@@ -19,7 +19,6 @@ const AVAILABLE_FIELDS = [
   { key: 'tags', label: 'Tags', default: false },
 ];
 
-// Robust tag normalizer to handle null, undefined, JSON strings, or raw string arrays
 const normalizeTags = (rawTags) => {
   if (!rawTags) return [];
   if (Array.isArray(rawTags)) {
@@ -47,9 +46,8 @@ const normalizeTags = (rawTags) => {
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'library' | 'wishlist'
+  const [activeTab, setActiveTab] = useState('search');
   
-  // Search View State
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -59,38 +57,36 @@ export default function App() {
   const dropdownRef = useRef(null);
   const isSearchingRef = useRef(false);
 
-  // Library & Wishlist Data State
   const [libraryMap, setLibraryMap] = useState({});
   const [libraryList, setLibraryList] = useState([]);
   const [wishlistMap, setWishlistMap] = useState({});
   const [wishlistList, setWishlistList] = useState([]);
   
-  // Filters & Inputs
   const [librarySearch, setLibrarySearch] = useState('');
   const [wishlistSearch, setWishlistSearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('');
   const [tagInputs, setTagInputs] = useState({});
 
-  // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFields, setSelectedFields] = useState(
     AVAILABLE_FIELDS.filter((f) => f.default).map((f) => f.key)
   );
-  const [exportFormat, setExportFormat] = useState('csv'); // 'csv' | 'json' | 'pdf'
+  const [exportFormat, setExportFormat] = useState('csv');
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
 
-  // Full-Size Image Modal State
   const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Current Session:', session);
       setSession(session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth State Event:', _event, session);
       setSession(session);
     });
 
@@ -129,7 +125,7 @@ export default function App() {
           setSelectedIndex(-1);
         }
       } catch (err) {
-        console.error('Autocomplete error:', err);
+        console.error('Autocomplete Error:', err);
       }
     };
 
@@ -149,13 +145,15 @@ export default function App() {
   }, []);
 
   const fetchLibrary = async (userId) => {
+    console.log('Fetching library for user:', userId);
     const { data, error } = await supabase
       .from('user_cards')
       .select('id, scryfall_id, card_name, set_name, image_url, reg_quantity, foil_quantity, tags')
       .eq('user_id', userId);
 
     if (error) {
-      console.error('Error fetching library:', error);
+      console.error('Fetch Library Error:', error.message, error.details);
+      alert(`Fetch Library Failed: ${error.message}`);
       return;
     }
 
@@ -176,18 +174,21 @@ export default function App() {
       }
     });
 
+    console.log('Library Loaded Successfully:', sanitizedData);
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
   };
 
   const fetchWishlist = async (userId) => {
+    console.log('Fetching wishlist for user:', userId);
     const { data, error } = await supabase
       .from('user_wishlist')
       .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
       .eq('user_id', userId);
 
     if (error) {
-      console.error('Error fetching wishlist:', error);
+      console.error('Fetch Wishlist Error:', error.message, error.details);
+      alert(`Fetch Wishlist Failed: ${error.message}`);
       return;
     }
 
@@ -199,6 +200,7 @@ export default function App() {
       }
     });
 
+    console.log('Wishlist Loaded Successfully:', data);
     setWishlistMap(map);
     setWishlistList(data || []);
   };
@@ -252,7 +254,10 @@ export default function App() {
   };
 
   const handleUpdateQuantity = async (card, isFoil, delta) => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      alert('User session not found.');
+      return;
+    }
 
     const scryfallId = String(card.id || card.scryfall_id).trim().toLowerCase();
     const current = libraryMap[scryfallId] || { reg: 0, foil: 0, tags: [] };
@@ -260,6 +265,8 @@ export default function App() {
 
     const newReg = isFoil ? current.reg : Math.max(0, current.reg + delta);
     const newFoil = isFoil ? Math.max(0, current.foil + delta) : current.foil;
+
+    console.log(`Updating ${card.name || card.card_name}: Reg ${newReg}, Foil ${newFoil}`);
 
     if (newReg === 0 && newFoil === 0) {
       const { error } = await supabase
@@ -269,6 +276,7 @@ export default function App() {
         .eq('scryfall_id', card.id || card.scryfall_id);
 
       if (error) {
+        console.error('Delete Error:', error);
         alert(`Delete Error: ${error.message}`);
         return;
       }
@@ -277,24 +285,24 @@ export default function App() {
       return;
     }
 
+    const payload = {
+      user_id: session.user.id,
+      scryfall_id: card.id || card.scryfall_id,
+      card_name: card.name || card.card_name,
+      set_name: card.set_name,
+      image_url: imgUrl,
+      reg_quantity: newReg,
+      foil_quantity: newFoil,
+      tags: current.tags || [],
+    };
+
     const { error } = await supabase
       .from('user_cards')
-      .upsert(
-        {
-          user_id: session.user.id,
-          scryfall_id: card.id || card.scryfall_id,
-          card_name: card.name || card.card_name,
-          set_name: card.set_name,
-          image_url: imgUrl,
-          reg_quantity: newReg,
-          foil_quantity: newFoil,
-          tags: current.tags || [],
-        },
-        { onConflict: 'user_id, scryfall_id' }
-      );
+      .upsert(payload, { onConflict: 'user_id, scryfall_id' });
 
     if (error) {
-      alert(`Upsert Error: ${error.message}`);
+      console.error('Upsert Error:', error);
+      alert(`Upsert Error: ${error.message}\n${error.details || ''}`);
     } else {
       await fetchLibrary(session.user.id);
     }
@@ -313,7 +321,7 @@ export default function App() {
         .eq('user_id', session.user.id)
         .eq('scryfall_id', card.id || card.scryfall_id);
 
-      if (error) alert(`Wishlist Delete Error: ${error.message}`);
+      if (error) console.error('Wishlist Delete Error:', error);
     } else {
       const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
       const { error } = await supabase
@@ -330,7 +338,7 @@ export default function App() {
           { onConflict: 'user_id, scryfall_id' }
         );
 
-      if (error) alert(`Wishlist Error: ${error.message}`);
+      if (error) console.error('Wishlist Upsert Error:', error);
     }
 
     await fetchWishlist(session.user.id);
@@ -355,6 +363,7 @@ export default function App() {
       .eq('scryfall_id', card.scryfall_id || card.id);
 
     if (error) {
+      console.error('Wishlist Qty Error:', error);
       alert(`Wishlist Qty Error: ${error.message}`);
     } else {
       await fetchWishlist(session.user.id);
@@ -401,6 +410,7 @@ export default function App() {
       .eq('scryfall_id', card.scryfall_id || card.id);
 
     if (error) {
+      console.error('Tag Update Error:', error);
       alert(`Tag Error: ${error.message}`);
       await fetchLibrary(session.user.id);
     }
@@ -439,6 +449,7 @@ export default function App() {
       .eq('scryfall_id', card.scryfall_id || card.id);
 
     if (error) {
+      console.error('Tag Delete Error:', error);
       alert(`Tag Delete Error: ${error.message}`);
       await fetchLibrary(session.user.id);
     }
@@ -691,7 +702,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700 mb-6">
           <button
             onClick={() => setActiveTab('search')}
@@ -725,7 +735,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Tab Content */}
         {activeTab === 'search' && (
           <div>
             <div ref={dropdownRef} className="relative mb-8">
@@ -1060,7 +1069,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Export Modal */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-5">
@@ -1074,7 +1082,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Export Format Selector */}
             <div>
               <label className="block text-sm font-semibold mb-2">
                 Export Format
@@ -1097,7 +1104,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Field Selectors */}
             <div>
               <label className="block text-sm font-semibold mb-2">
                 Fields to Include
@@ -1124,7 +1130,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Loading Indicator */}
             {exporting && (
               <div className="space-y-2 text-center py-2">
                 <div className="flex items-center justify-center gap-2 text-blue-600 font-semibold">
@@ -1139,7 +1144,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Modal Actions */}
             <div className="flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
               <button
                 onClick={() => setShowExportModal(false)}
@@ -1160,7 +1164,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Full-screen Image Preview Overlay */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-pointer"
