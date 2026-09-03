@@ -2,6 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Login from './Login.jsx';
 
+// Available Scryfall fields to pick from
+const AVAILABLE_FIELDS = [
+  { key: 'card_name', label: 'Title / Card Name', default: true },
+  { key: 'set_name', label: 'Edition / Set Name', default: true },
+  { key: 'reg_quantity', label: 'Regular Quantity', default: true },
+  { key: 'foil_quantity', label: 'Foil Quantity', default: true },
+  { key: 'mana_cost', label: 'Mana Cost', default: false },
+  { key: 'type_line', label: 'Type Line', default: false },
+  { key: 'oracle_text', label: 'Oracle Text', default: false },
+  { key: 'rarity', label: 'Rarity', default: false },
+  { key: 'cmc', label: 'CMC', default: false },
+  { key: 'colors', label: 'Colors', default: false },
+  { key: 'price_usd', label: 'Price (USD)', default: false },
+  { key: 'price_usd_foil', label: 'Price Foil (USD)', default: false },
+  { key: 'tags', label: 'Tags', default: false },
+];
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState('search'); // 'search' | 'library' | 'wishlist'
@@ -27,6 +44,15 @@ export default function App() {
   const [wishlistSearch, setWishlistSearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('');
   const [tagInputs, setTagInputs] = useState({});
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedFields, setSelectedFields] = useState(
+    AVAILABLE_FIELDS.filter((f) => f.default).map((f) => f.key)
+  );
+  const [exportFormat, setExportFormat] = useState('csv'); // 'csv' | 'json' | 'pdf'
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   // Full-Size Image Modal State
   const [previewImage, setPreviewImage] = useState(null);
@@ -352,6 +378,191 @@ export default function App() {
     }
   };
 
+  // Scryfall Bulk Fetch Helper
+  const fetchScryfallDetails = async (cardsToExport) => {
+    const scryfallDataMap = {};
+    const chunkSize = 75; // Scryfall /cards/collection limit is 75 identifiers
+    const chunks = [];
+
+    for (let i = 0; i < cardsToExport.length; i += chunkSize) {
+      chunks.push(cardsToExport.slice(i, i + chunkSize));
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const identifiers = chunk.map((c) => ({ id: c.scryfall_id }));
+
+      try {
+        const res = await fetch('https://api.scryfall.com/cards/collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifiers }),
+        });
+        const json = await res.json();
+
+        (json.data || []).forEach((scryfallCard) => {
+          scryfallDataMap[scryfallCard.id.toLowerCase()] = scryfallCard;
+        });
+      } catch (err) {
+        console.error('Error fetching Scryfall collection chunk:', err);
+      }
+
+      setExportProgress(Math.round(((i + 1) / chunks.length) * 100));
+    }
+
+    return scryfallDataMap;
+  };
+
+  const handleExecuteExport = async () => {
+    if (filteredLibrary.length === 0) {
+      alert('No library cards to export!');
+      return;
+    }
+
+    setExporting(true);
+    setExportProgress(0);
+
+    try {
+      const scryfallMap = await fetchScryfallDetails(filteredLibrary);
+
+      const exportedData = filteredLibrary.map((item) => {
+        const scryfallObj = scryfallMap[String(item.scryfall_id).toLowerCase()] || {};
+        const record = {};
+
+        selectedFields.forEach((fieldKey) => {
+          switch (fieldKey) {
+            case 'card_name':
+              record['Title'] = item.card_name || scryfallObj.name || '';
+              break;
+            case 'set_name':
+              record['Edition'] = item.set_name || scryfallObj.set_name || '';
+              break;
+            case 'reg_quantity':
+              record['Regular Qty'] = item.reg_quantity || 0;
+              break;
+            case 'foil_quantity':
+              record['Foil Qty'] = item.foil_quantity || 0;
+              break;
+            case 'mana_cost':
+              record['Mana Cost'] = scryfallObj.mana_cost || '';
+              break;
+            case 'type_line':
+              record['Type Line'] = scryfallObj.type_line || '';
+              break;
+            case 'oracle_text':
+              record['Oracle Text'] = scryfallObj.oracle_text || '';
+              break;
+            case 'rarity':
+              record['Rarity'] = scryfallObj.rarity || '';
+              break;
+            case 'cmc':
+              record['CMC'] = scryfallObj.cmc ?? '';
+              break;
+            case 'colors':
+              record['Colors'] = (scryfallObj.colors || []).join(', ');
+              break;
+            case 'price_usd':
+              record['Price USD'] = scryfallObj.prices?.usd || '';
+              break;
+            case 'price_usd_foil':
+              record['Price Foil USD'] = scryfallObj.prices?.usd_foil || '';
+              break;
+            case 'tags':
+              record['Tags'] = (item.tags || []).join(', ');
+              break;
+            default:
+              break;
+          }
+        });
+
+        return record;
+      });
+
+      if (exportFormat === 'json') {
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportedData, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute('href', dataStr);
+        downloadAnchor.setAttribute('download', 'mtg_library.json');
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+      } else if (exportFormat === 'csv') {
+        const headers = Object.keys(exportedData[0] || {});
+        const csvRows = [];
+        csvRows.push(headers.join(','));
+
+        for (const row of exportedData) {
+          const values = headers.map((header) => {
+            const val = row[header] ?? '';
+            const escaped = ('' + val).replace(/"/g, '""');
+            return `"${escaped}"`;
+          });
+          csvRows.push(values.join(','));
+        }
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'mtg_library.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (exportFormat === 'pdf') {
+        const headers = Object.keys(exportedData[0] || {});
+        const printWindow = window.open('', '_blank');
+        
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>MTG Collection Export</title>
+              <style>
+                body { font-family: sans-serif; padding: 20px; color: #333; }
+                h1 { font-size: 20px; margin-bottom: 10px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+                th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+                tr:nth-child(even) { background-color: #fafafa; }
+              </style>
+            </head>
+            <body>
+              <h1>MTG Personal Library</h1>
+              <table>
+                <thead>
+                  <tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>
+                </thead>
+                <tbody>
+                  ${exportedData
+                    .map(
+                      (row) =>
+                        `<tr>${headers.map((h) => `<td>${row[h]}</td>`).join('')}</tr>`
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </body>
+          </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+
+      setShowExportModal(false);
+    } catch (err) {
+      console.error('Export Error:', err);
+      alert('An error occurred while generating the export.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setLibraryMap({});
@@ -587,6 +798,13 @@ export default function App() {
                   <option key={tag} value={tag}>🏷️ {tag}</option>
                 ))}
               </select>
+
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold cursor-pointer shadow-sm transition-colors flex items-center justify-center gap-2"
+              >
+                📥 Export Library
+              </button>
             </div>
 
             <div className="space-y-6">
@@ -763,6 +981,106 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3">
+              <h2 className="text-xl font-bold">Export Library</h2>
+              <button
+                onClick={() => !exporting && setShowExportModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Export Format Selector */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">
+                Export Format
+              </label>
+              <div className="flex gap-4">
+                {['csv', 'pdf', 'json'].map((fmt) => (
+                  <label key={fmt} className="flex items-center gap-2 cursor-pointer uppercase text-sm font-medium">
+                    <input
+                      type="radio"
+                      name="format"
+                      value={fmt}
+                      checked={exportFormat === fmt}
+                      onChange={(e) => setExportFormat(e.target.value)}
+                      disabled={exporting}
+                      className="accent-blue-600"
+                    />
+                    {fmt}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Field Selectors */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">
+                Fields to Include
+              </label>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 dark:border-slate-700 rounded-lg">
+                {AVAILABLE_FIELDS.map((field) => (
+                  <label key={field.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(field.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedFields([...selectedFields, field.key]);
+                        } else {
+                          setSelectedFields(selectedFields.filter((k) => k !== field.key));
+                        }
+                      }}
+                      disabled={exporting}
+                      className="rounded accent-blue-600"
+                    />
+                    {field.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Loading Indicator */}
+            {exporting && (
+              <div className="space-y-2 text-center py-2">
+                <div className="flex items-center justify-center gap-2 text-blue-600 font-semibold">
+                  <span className="animate-spin text-xl">🌀</span> Fetching card details... {exportProgress}%
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-blue-600 h-full transition-all duration-200"
+                    style={{ width: `${exportProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+              <button
+                onClick={() => setShowExportModal(false)}
+                disabled={exporting}
+                className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-sm font-semibold cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExecuteExport}
+                disabled={exporting || selectedFields.length === 0}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {exporting ? 'Exporting...' : 'Download Export'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-screen Image Preview Overlay */}
       {previewImage && (
