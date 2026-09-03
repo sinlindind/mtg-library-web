@@ -19,6 +19,32 @@ const AVAILABLE_FIELDS = [
   { key: 'tags', label: 'Tags', default: false },
 ];
 
+// Robust tag normalizer to handle null, undefined, JSON strings, or raw string arrays
+const normalizeTags = (rawTags) => {
+  if (!rawTags) return [];
+  if (Array.isArray(rawTags)) {
+    return rawTags
+      .map((t) => String(t).trim().toLowerCase())
+      .filter((t) => t.length > 0);
+  }
+  if (typeof rawTags === 'string') {
+    try {
+      const parsed = JSON.parse(rawTags);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((t) => String(t).trim().toLowerCase())
+          .filter((t) => t.length > 0);
+      }
+    } catch {
+      return rawTags
+        .split(',')
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length > 0);
+    }
+  }
+  return [];
+};
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState('search'); // 'search' | 'library' | 'wishlist'
@@ -133,12 +159,9 @@ export default function App() {
       return;
     }
 
-    // Ensure tags is always an array of cleaned, lowercase strings
     const sanitizedData = (data || []).map((item) => ({
       ...item,
-      tags: Array.isArray(item.tags)
-        ? item.tags.map((t) => String(t).trim().toLowerCase())
-        : [],
+      tags: normalizeTags(item.tags),
     }));
 
     const qtyMap = {};
@@ -343,8 +366,7 @@ export default function App() {
     if (!tag || !session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const rawTags = card.tags || libraryMap[scryfallId]?.tags || [];
-    const currentTags = Array.isArray(rawTags) ? rawTags.map((t) => String(t).trim().toLowerCase()) : [];
+    const currentTags = normalizeTags(card.tags?.length ? card.tags : libraryMap[scryfallId]?.tags);
 
     if (currentTags.includes(tag)) {
       setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
@@ -353,7 +375,6 @@ export default function App() {
 
     const updatedTags = [...currentTags, tag];
 
-    // Optimistically update state locally
     setLibraryList((prev) =>
       prev.map((item) =>
         String(item.scryfall_id).trim().toLowerCase() === scryfallId
@@ -388,13 +409,11 @@ export default function App() {
     if (!session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const rawTags = card.tags || libraryMap[scryfallId]?.tags || [];
-    const currentTags = Array.isArray(rawTags) ? rawTags.map((t) => String(t).trim().toLowerCase()) : [];
+    const currentTags = normalizeTags(card.tags?.length ? card.tags : libraryMap[scryfallId]?.tags);
     const cleanRemove = String(tagToRemove).trim().toLowerCase();
 
     const updatedTags = currentTags.filter((t) => t !== cleanRemove);
 
-    // Optimistically update state locally
     setLibraryList((prev) =>
       prev.map((item) =>
         String(item.scryfall_id).trim().toLowerCase() === scryfallId
@@ -423,7 +442,6 @@ export default function App() {
     }
   };
 
-  // Scryfall Bulk Fetch Helper
   const fetchScryfallDetails = async (cardsToExport) => {
     const scryfallDataMap = {};
     const chunkSize = 75;
@@ -462,9 +480,11 @@ export default function App() {
     return libraryList.filter((card) => {
       const scryfallId = String(card.scryfall_id).trim().toLowerCase();
       
-      const rawTags = card.tags ?? libraryMap[scryfallId]?.tags ?? [];
-      const cardTags = (Array.isArray(rawTags) ? rawTags : []).map((t) =>
-        String(t).trim().toLowerCase()
+      // Merge card.tags with libraryMap fallback safely
+      const cardTags = normalizeTags(
+        card.tags && card.tags.length > 0
+          ? card.tags
+          : libraryMap[scryfallId]?.tags
       );
 
       const searchLower = librarySearch.trim().toLowerCase();
@@ -627,7 +647,7 @@ export default function App() {
     } catch (err) {
       console.error('Export Error:', err);
       alert('An error occurred while generating the export.');
-    } finally {
+    } fontally {
       setExporting(false);
     }
   };
@@ -645,10 +665,7 @@ export default function App() {
 
   const allAvailableTags = Array.from(
     new Set(
-      libraryList.flatMap((item) => {
-        const tags = Array.isArray(item.tags) ? item.tags : [];
-        return tags.map((t) => String(t).trim().toLowerCase());
-      })
+      libraryList.flatMap((item) => normalizeTags(item.tags))
     )
   );
 
@@ -873,26 +890,17 @@ export default function App() {
               </button>
             </div>
 
-            {/* TEMPORARY DEBUG BOX */}
-            <div className="bg-slate-800 text-green-400 p-4 rounded-lg mb-6 font-mono text-xs overflow-x-auto space-y-2 border border-green-500/30">
-              <div><strong>Selected Tag Filter:</strong> {JSON.stringify(selectedTagFilter)} (Type: {typeof selectedTagFilter})</div>
-              <div><strong>Available Tags:</strong> {JSON.stringify(allAvailableTags)}</div>
-              <div><strong>Total Library List Count:</strong> {libraryList.length}</div>
-              <div><strong>Filtered Cards Count:</strong> {filteredLibrary.length}</div>
-              <div>
-                <strong>First Card Sample Tags:</strong> {JSON.stringify(libraryList[0]?.tags)} 
-                | <strong>Type:</strong> {Array.isArray(libraryList[0]?.tags) ? 'Array' : typeof libraryList[0]?.tags}
-              </div>
-            </div>
-
             <div className="space-y-6">
               {filteredLibrary.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No cards found matching your collection.</div>
               ) : (
                 filteredLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
-                  const rawTags = card.tags || libraryMap[scryfallId]?.tags || [];
-                  const currentTags = Array.isArray(rawTags) ? rawTags : [];
+                  const currentTags = normalizeTags(
+                    card.tags && card.tags.length > 0
+                      ? card.tags
+                      : libraryMap[scryfallId]?.tags
+                  );
                   const isWishlisted = !!wishlistMap[scryfallId];
 
                   return (
