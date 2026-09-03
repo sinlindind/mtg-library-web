@@ -160,6 +160,17 @@ export default function App() {
       return;
     }
 
+    // Check if Absolute Grace exists in the raw database query result
+    const graceCheck = (data || []).find(c => 
+      c.card_name?.toLowerCase().includes('absolute grace')
+    );
+    
+    if (graceCheck) {
+      console.log('✅ Absolute Grace FOUND in Supabase query:', graceCheck);
+    } else {
+      console.log('❌ Absolute Grace NOT FOUND in Supabase query. Total rows returned:', data?.length);
+    }
+
     const sanitizedData = (data || []).map((item) => ({
       ...item,
       tags: normalizeTags(item.tags),
@@ -177,7 +188,6 @@ export default function App() {
       }
     });
 
-    console.log('Library Loaded Successfully:', sanitizedData);
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
   };
