@@ -366,7 +366,8 @@ export default function App() {
     if (!tag || !session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const currentTags = normalizeTags(card.tags?.length ? card.tags : libraryMap[scryfallId]?.tags);
+    const rawExisting = card.tags ?? libraryMap[scryfallId]?.tags;
+    const currentTags = normalizeTags(rawExisting);
 
     if (currentTags.includes(tag)) {
       setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
@@ -409,7 +410,8 @@ export default function App() {
     if (!session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const currentTags = normalizeTags(card.tags?.length ? card.tags : libraryMap[scryfallId]?.tags);
+    const rawExisting = card.tags ?? libraryMap[scryfallId]?.tags;
+    const currentTags = normalizeTags(rawExisting);
     const cleanRemove = String(tagToRemove).trim().toLowerCase();
 
     const updatedTags = currentTags.filter((t) => t !== cleanRemove);
@@ -478,16 +480,9 @@ export default function App() {
 
   const getFilteredLibrary = () => {
     return libraryList.filter((card) => {
-      const scryfallId = String(card.scryfall_id).trim().toLowerCase();
-      
-      // Merge card.tags with libraryMap fallback safely
-      const cardTags = normalizeTags(
-        card.tags && card.tags.length > 0
-          ? card.tags
-          : libraryMap[scryfallId]?.tags
-      );
-
+      const cardTags = normalizeTags(card.tags);
       const searchLower = librarySearch.trim().toLowerCase();
+      
       const matchesSearch =
         !searchLower ||
         card.card_name?.toLowerCase().includes(searchLower) ||
@@ -896,11 +891,7 @@ export default function App() {
               ) : (
                 filteredLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
-                  const currentTags = normalizeTags(
-                    card.tags && card.tags.length > 0
-                      ? card.tags
-                      : libraryMap[scryfallId]?.tags
-                  );
+                  const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
 
                   return (
