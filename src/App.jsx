@@ -133,20 +133,26 @@ export default function App() {
       return;
     }
 
+    // Ensure tags is always an array
+    const sanitizedData = (data || []).map((item) => ({
+      ...item,
+      tags: item.tags || [],
+    }));
+
     const qtyMap = {};
-    (data || []).forEach((item) => {
+    sanitizedData.forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
       if (cleanSid) {
         qtyMap[cleanSid] = {
           reg: item.reg_quantity || 0,
           foil: item.foil_quantity || 0,
-          tags: item.tags || [],
+          tags: item.tags,
         };
       }
     });
 
     setLibraryMap(qtyMap);
-    setLibraryList(data || []);
+    setLibraryList(sanitizedData);
   };
 
   const fetchWishlist = async (userId) => {
@@ -447,20 +453,23 @@ export default function App() {
   };
 
   const getFilteredLibrary = () => {
-    return libraryList.filter((card) => {
-      const scryfallId = String(card.scryfall_id).trim().toLowerCase();
-      const cardTags = card.tags || libraryMap[scryfallId]?.tags || [];
+  return libraryList.filter((card) => {
+    const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+    
+    // Explicitly fallback to map tags if array on card object is missing
+    const cardTags = card.tags ?? libraryMap[scryfallId]?.tags ?? [];
 
-      const matchesSearch =
-        card.card_name?.toLowerCase().includes(librarySearch.toLowerCase()) ||
-        card.set_name?.toLowerCase().includes(librarySearch.toLowerCase());
+    const matchesSearch =
+      card.card_name?.toLowerCase().includes(librarySearch.toLowerCase()) ||
+      card.set_name?.toLowerCase().includes(librarySearch.toLowerCase());
 
-      const matchesTag =
-        !selectedTagFilter || cardTags.includes(selectedTagFilter);
+    // Explicitly check for empty filter state
+    const matchesTag =
+      selectedTagFilter === '' || cardTags.includes(selectedTagFilter);
 
-      return matchesSearch && matchesTag;
-    });
-  };
+    return matchesSearch && matchesTag;
+  });
+};
 
   const handleExecuteExport = async () => {
     const cardsToExport = getFilteredLibrary();
