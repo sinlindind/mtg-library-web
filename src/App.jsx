@@ -335,7 +335,7 @@ export default function App() {
     if (!tag || !session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const currentTags = libraryMap[scryfallId]?.tags || [];
+    const currentTags = libraryMap[scryfallId]?.tags || card.tags || [];
 
     if (currentTags.includes(tag)) {
       setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
@@ -343,6 +343,15 @@ export default function App() {
     }
 
     const updatedTags = [...currentTags, tag];
+
+    // Optimistically update local library list
+    setLibraryList((prev) =>
+      prev.map((item) =>
+        String(item.scryfall_id).trim().toLowerCase() === scryfallId
+          ? { ...item, tags: updatedTags }
+          : item
+      )
+    );
 
     const { error } = await supabase
       .from('user_cards')
@@ -352,6 +361,7 @@ export default function App() {
 
     if (error) {
       alert(`Tag Error: ${error.message}`);
+      await fetchLibrary(session.user.id);
     } else {
       setTagInputs((prev) => ({ ...prev, [scryfallId]: '' }));
       await fetchLibrary(session.user.id);
@@ -362,8 +372,17 @@ export default function App() {
     if (!session?.user?.id) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const currentTags = libraryMap[scryfallId]?.tags || [];
+    const currentTags = libraryMap[scryfallId]?.tags || card.tags || [];
     const updatedTags = currentTags.filter((t) => t !== tagToRemove);
+
+    // Optimistically update local library list
+    setLibraryList((prev) =>
+      prev.map((item) =>
+        String(item.scryfall_id).trim().toLowerCase() === scryfallId
+          ? { ...item, tags: updatedTags }
+          : item
+      )
+    );
 
     const { error } = await supabase
       .from('user_cards')
@@ -373,6 +392,7 @@ export default function App() {
 
     if (error) {
       alert(`Tag Delete Error: ${error.message}`);
+      await fetchLibrary(session.user.id);
     } else {
       await fetchLibrary(session.user.id);
     }
@@ -381,7 +401,7 @@ export default function App() {
   // Scryfall Bulk Fetch Helper
   const fetchScryfallDetails = async (cardsToExport) => {
     const scryfallDataMap = {};
-    const chunkSize = 75; // Scryfall /cards/collection limit is 75 identifiers
+    const chunkSize = 75;
     const chunks = [];
 
     for (let i = 0; i < cardsToExport.length; i += chunkSize) {
@@ -413,9 +433,27 @@ export default function App() {
     return scryfallDataMap;
   };
 
+  const getFilteredLibrary = () => {
+    return libraryList.filter((card) => {
+      const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+      const cardTags = card.tags || libraryMap[scryfallId]?.tags || [];
+
+      const matchesSearch =
+        card.card_name?.toLowerCase().includes(librarySearch.toLowerCase()) ||
+        card.set_name?.toLowerCase().includes(librarySearch.toLowerCase());
+
+      const matchesTag =
+        !selectedTagFilter || cardTags.includes(selectedTagFilter);
+
+      return matchesSearch && matchesTag;
+    });
+  };
+
   const handleExecuteExport = async () => {
-    if (filteredLibrary.length === 0) {
-      alert('No library cards to export!');
+    const cardsToExport = getFilteredLibrary();
+
+    if (cardsToExport.length === 0) {
+      alert('No library cards match your current filter to export!');
       return;
     }
 
@@ -423,9 +461,9 @@ export default function App() {
     setExportProgress(0);
 
     try {
-      const scryfallMap = await fetchScryfallDetails(filteredLibrary);
+      const scryfallMap = await fetchScryfallDetails(cardsToExport);
 
-      const exportedData = filteredLibrary.map((item) => {
+      const exportedData = cardsToExport.map((item) => {
         const scryfallObj = scryfallMap[String(item.scryfall_id).toLowerCase()] || {};
         const record = {};
 
@@ -528,7 +566,7 @@ export default function App() {
               </style>
             </head>
             <body>
-              <h1>MTG Personal Library</h1>
+              <h1>MTG Personal Library ${selectedTagFilter ? `(Filtered: ${selectedTagFilter})` : ''}</h1>
               <table>
                 <thead>
                   <tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>
@@ -578,15 +616,7 @@ export default function App() {
     new Set(libraryList.flatMap((item) => item.tags || []))
   );
 
-  const filteredLibrary = libraryList.filter((card) => {
-    const matchesSearch =
-      card.card_name?.toLowerCase().includes(librarySearch.toLowerCase()) ||
-      card.set_name?.toLowerCase().includes(librarySearch.toLowerCase());
-    const matchesTag =
-      !selectedTagFilter || (card.tags || []).includes(selectedTagFilter);
-
-    return matchesSearch && matchesTag;
-  });
+  const filteredLibrary = getFilteredLibrary();
 
   const filteredWishlist = wishlistList.filter((card) =>
     card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
@@ -813,7 +843,7 @@ export default function App() {
               ) : (
                 filteredLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
-                  const currentTags = card.tags || [];
+                  const currentTags = card.tags || libraryMap[scryfallId]?.tags || [];
                   const isWishlisted = !!wishlistMap[scryfallId];
 
                   return (
@@ -943,7 +973,7 @@ export default function App() {
                         <p className="text-base text-slate-500">{card.set_name}</p>
 
                         {totalOwned > 0 ? (
-                          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-xs font-medium border border-emerald-200 dark:border-emerald-800">
+                          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
                             📦 In Collection: {totalOwned}x
                           </span>
                         ) : (
