@@ -21,11 +21,15 @@ const AVAILABLE_FIELDS = [
 
 const normalizeTags = (rawTags) => {
   if (!rawTags) return [];
+  
+  // Handle array input
   if (Array.isArray(rawTags)) {
     return rawTags
       .map((t) => String(t).trim().toLowerCase())
       .filter((t) => t.length > 0);
   }
+  
+  // Handle string input
   if (typeof rawTags === 'string') {
     try {
       const parsed = JSON.parse(rawTags);
