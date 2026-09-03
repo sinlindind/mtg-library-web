@@ -647,7 +647,7 @@ export default function App() {
     } catch (err) {
       console.error('Export Error:', err);
       alert('An error occurred while generating the export.');
-    } fontally {
+    } finally {
       setExporting(false);
     }
   };
