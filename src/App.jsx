@@ -65,7 +65,7 @@ export default function App() {
   
   const [librarySearch, setLibrarySearch] = useState('');
   const [wishlistSearch, setWishlistSearch] = useState('');
-  const [selectedTagFilter, setSelectedTagFilter] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState('__all__');
   const [tagInputs, setTagInputs] = useState({});
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -178,9 +178,6 @@ export default function App() {
       return;
     }
 
-    // DEBUG 1: Direct inspect of Supabase response for Absolute Law
-    console.log('[DEBUG 1] Raw DB Fetch:', data?.filter(c => c.card_name?.toLowerCase().includes('absolute law')));
-
     const sanitizedData = (data || []).map((item) => {
       let parsedTags = [];
 
@@ -203,9 +200,6 @@ export default function App() {
         tags: cleanTags,
       };
     });
-
-    // DEBUG 2: Inspect after array transformations and tag parsing
-    console.log('[DEBUG 2] Sanitized Library List:', sanitizedData.filter(c => c.card_name?.toLowerCase().includes('absolute law')));
 
     const qtyMap = {};
     sanitizedData.forEach((item) => {
@@ -539,21 +533,6 @@ export default function App() {
       activeTagFilter === 'all' || 
       activeTagFilter === '__all__';
 
-    // DEBUG 3: Evaluates active state parameters when running filter pipeline
-    const absoluteLawCard = libraryList.find(c => c.card_name?.toLowerCase().includes('absolute law'));
-    if (absoluteLawCard) {
-      console.log('[DEBUG 3] Absolute Law in getFilteredLibrary:', {
-        card: absoluteLawCard,
-        reg_quantity: absoluteLawCard.reg_quantity,
-        foil_quantity: absoluteLawCard.foil_quantity,
-        tags: absoluteLawCard.tags,
-        activeTagFilter: selectedTagFilter,
-        isAllTags
-      });
-    } else {
-      console.log('[DEBUG 3] Absolute Law NOT FOUND in libraryList state!');
-    }
-
     return libraryList.filter((card) => {
       const matchesSearch =
         !searchLower ||
@@ -563,7 +542,7 @@ export default function App() {
       if (!matchesSearch) return false;
       if (isAllTags) return true;
 
-      const cardTags = Array.isArray(card.tags) ? card.tags : [];
+      const cardTags = normalizeTags(card.tags);
       return cardTags.includes(activeTagFilter);
     });
   };
@@ -685,7 +664,7 @@ export default function App() {
               </style>
             </head>
             <body>
-              <h1>MTG Personal Library ${selectedTagFilter ? `(Filtered: ${selectedTagFilter})` : ''}</h1>
+              <h1>MTG Personal Library ${selectedTagFilter !== '__all__' ? `(Filtered: ${selectedTagFilter})` : ''}</h1>
               <table>
                 <thead>
                   <tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>
@@ -942,7 +921,7 @@ export default function App() {
                 onChange={(e) => setSelectedTagFilter(e.target.value)}
                 className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 min-w-[180px]"
               >
-                <option value="">All Tags</option>
+                <option value="__all__">All Tags</option>
                 {allAvailableTags.map((tag) => (
                   <option key={tag} value={tag}>🏷️ {tag}</option>
                 ))}
