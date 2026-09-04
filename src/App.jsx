@@ -157,7 +157,6 @@ export default function App() {
   const fetchLibrary = async (userId) => {
     if (!userId) return;
 
-    console.log('Fetching library for user:', userId);
     const { data, error } = await supabase
       .from('user_cards')
       .select('id, scryfall_id, card_name, set_name, image_url, reg_quantity, foil_quantity, tags')
@@ -178,12 +177,10 @@ export default function App() {
       return;
     }
 
-    const sanitizedData = (data || []).map((item) => {
-      return {
-        ...item,
-        tags: normalizeTags(item.tags),
-      };
-    });
+    const sanitizedData = (data || []).map((item) => ({
+      ...item,
+      tags: normalizeTags(item.tags),
+    }));
 
     const qtyMap = {};
     sanitizedData.forEach((item) => {
@@ -202,7 +199,6 @@ export default function App() {
   };
 
   const fetchWishlist = async (userId) => {
-    console.log('Fetching wishlist for user:', userId);
     const { data, error } = await supabase
       .from('user_wishlist')
       .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
@@ -508,14 +504,15 @@ export default function App() {
     return scryfallDataMap;
   };
 
+  // Client-side filtering for text search and tag select
   const getFilteredLibrary = () => {
     const searchLower = (librarySearch || '').trim().toLowerCase();
-    const activeTagFilter = (selectedTagFilter || '').trim().toLowerCase();
-    const isAllTags = 
-      !activeTagFilter || 
-      activeTagFilter === 'all tags' || 
-      activeTagFilter === 'all' || 
-      activeTagFilter === '__all__';
+    const activeTag = (selectedTagFilter || '').trim().toLowerCase();
+    const isAllTags =
+      !activeTag ||
+      activeTag === 'all tags' ||
+      activeTag === 'all' ||
+      activeTag === '__all__';
 
     return libraryList.filter((card) => {
       const matchesSearch =
@@ -523,11 +520,10 @@ export default function App() {
         card.card_name?.toLowerCase().includes(searchLower) ||
         card.set_name?.toLowerCase().includes(searchLower);
 
-      if (!matchesSearch) return false;
-      if (isAllTags) return true;
-
       const cardTags = normalizeTags(card.tags);
-      return cardTags.includes(activeTagFilter);
+      const matchesTag = isAllTags || cardTags.includes(activeTag);
+
+      return matchesSearch && matchesTag;
     });
   };
 
