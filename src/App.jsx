@@ -63,9 +63,7 @@ export default function App() {
   const [wishlistMap, setWishlistMap] = useState({});
   const [wishlistList, setWishlistList] = useState([]);
   
-  const [librarySearch, setLibrarySearch] = useState('');
   const [wishlistSearch, setWishlistSearch] = useState('');
-  const [selectedTagFilter, setSelectedTagFilter] = useState('__all__');
   const [tagInputs, setTagInputs] = useState({});
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -506,34 +504,11 @@ export default function App() {
     return scryfallDataMap;
   };
 
-  const getFilteredLibrary = () => {
-    const searchLower = (librarySearch || '').trim().toLowerCase();
-    const activeTag = (selectedTagFilter || '').trim().toLowerCase();
-    
-    const isAllTags =
-      !activeTag ||
-      activeTag === '__all__' ||
-      activeTag === 'all tags' ||
-      activeTag === 'all';
-
-    return libraryList.filter((card) => {
-      const matchesSearch =
-        !searchLower ||
-        card.card_name?.toLowerCase().includes(searchLower) ||
-        card.set_name?.toLowerCase().includes(searchLower);
-
-      const cardTags = normalizeTags(card.tags);
-      const matchesTag = isAllTags || cardTags.includes(activeTag);
-
-      return matchesSearch && matchesTag;
-    });
-  };
-
   const handleExecuteExport = async () => {
-    const cardsToExport = getFilteredLibrary();
+    const cardsToExport = libraryList;
 
     if (cardsToExport.length === 0) {
-      alert('No library cards match your current filter to export!');
+      alert('No library cards available to export!');
       return;
     }
 
@@ -646,7 +621,7 @@ export default function App() {
               </style>
             </head>
             <body>
-              <h1>MTG Personal Library ${selectedTagFilter !== '__all__' ? `(Filtered: ${selectedTagFilter})` : ''}</h1>
+              <h1>MTG Personal Library</h1>
               <table>
                 <thead>
                   <tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>
@@ -691,14 +666,6 @@ export default function App() {
   };
 
   if (!session) return <Login />;
-
-  const allAvailableTags = Array.from(
-    new Set(
-      libraryList.flatMap((item) => normalizeTags(item.tags))
-    )
-  );
-
-  const filteredLibrary = getFilteredLibrary();
 
   const filteredWishlist = wishlistList.filter((card) =>
     card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
@@ -889,26 +856,7 @@ export default function App() {
 
         {activeTab === 'library' && (
           <div>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <input
-                type="text"
-                value={librarySearch}
-                onChange={(e) => setLibrarySearch(e.target.value)}
-                placeholder="Search collection by name..."
-                className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-              />
-
-              <select
-                value={selectedTagFilter}
-                onChange={(e) => setSelectedTagFilter(e.target.value)}
-                className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 min-w-[180px]"
-              >
-                <option value="__all__">All Tags</option>
-                {allAvailableTags.map((tag) => (
-                  <option key={tag} value={tag}>🏷️ {tag}</option>
-                ))}
-              </select>
-
+            <div className="flex justify-end mb-6">
               <button
                 onClick={() => setShowExportModal(true)}
                 className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold cursor-pointer shadow-sm transition-colors flex items-center justify-center gap-2"
@@ -918,10 +866,10 @@ export default function App() {
             </div>
 
             <div className="space-y-6">
-              {filteredLibrary.length === 0 ? (
-                <div className="text-center py-12 text-slate-500">No cards found matching your collection.</div>
+              {libraryList.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">No cards found in your collection.</div>
               ) : (
-                filteredLibrary.map((card) => {
+                libraryList.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
