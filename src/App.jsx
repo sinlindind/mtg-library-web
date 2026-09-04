@@ -244,7 +244,7 @@ export default function App() {
       setSearchResults(json.data || []);
     } catch (err) {
       console.error('Scryfall API search error:', err);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
@@ -509,8 +509,30 @@ export default function App() {
     return scryfallDataMap;
   };
 
+  const filteredLibrary = libraryList.filter((card) => {
+    if (!librarySearch.trim()) return true;
+    const term = librarySearch.toLowerCase();
+    const nameMatch = card.card_name?.toLowerCase().includes(term);
+    const setMatch = card.set_name?.toLowerCase().includes(term);
+    const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
+    return nameMatch || setMatch || tagMatch;
+  });
+
+  const sortedLibrary = [...filteredLibrary].sort((a, b) => {
+    if (librarySort === 'name') {
+      return (a.card_name || '').localeCompare(b.card_name || '');
+    } else if (librarySort === 'set') {
+      return (a.set_name || '').localeCompare(b.set_name || '');
+    } else if (librarySort === 'quantity') {
+      const totalA = (a.reg_quantity || 0) + (a.foil_quantity || 0);
+      const totalB = (b.reg_quantity || 0) + (b.foil_quantity || 0);
+      return totalB - totalA;
+    }
+    return 0;
+  });
+
   const handleExecuteExport = async () => {
-    const cardsToExport = libraryList;
+    const cardsToExport = sortedLibrary;
 
     if (cardsToExport.length === 0) {
       alert('No library cards available to export!');
@@ -671,28 +693,6 @@ export default function App() {
   };
 
   if (!session) return <Login />;
-
-  const filteredLibrary = libraryList.filter((card) => {
-    if (!librarySearch.trim()) return true;
-    const term = librarySearch.toLowerCase();
-    const nameMatch = card.card_name?.toLowerCase().includes(term);
-    const setMatch = card.set_name?.toLowerCase().includes(term);
-    const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
-    return nameMatch || setMatch || tagMatch;
-  });
-
-  const sortedLibrary = [...filteredLibrary].sort((a, b) => {
-    if (librarySort === 'name') {
-      return (a.card_name || '').localeCompare(b.card_name || '');
-    } else if (librarySort === 'set') {
-      return (a.set_name || '').localeCompare(b.set_name || '');
-    } else if (librarySort === 'quantity') {
-      const totalA = (a.reg_quantity || 0) + (a.foil_quantity || 0);
-      const totalB = (b.reg_quantity || 0) + (b.foil_quantity || 0);
-      return totalB - totalA;
-    }
-    return 0;
-  });
 
   const filteredWishlist = wishlistList.filter((card) =>
     card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
