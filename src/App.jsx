@@ -196,10 +196,11 @@ export default function App() {
 
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
-    setSelectedTagFilter('__all__');
   };
 
   const fetchWishlist = async (userId) => {
+    if (!userId) return;
+
     const { data, error } = await supabase
       .from('user_wishlist')
       .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
