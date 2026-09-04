@@ -504,7 +504,6 @@ export default function App() {
     return scryfallDataMap;
   };
 
-  // Client-side filtering for text search and tag select
   const getFilteredLibrary = () => {
     const searchLower = (librarySearch || '').trim().toLowerCase();
     const activeTag = (selectedTagFilter || '').trim().toLowerCase();
