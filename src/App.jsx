@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Login from './Login.jsx';
 
-// Available Scryfall fields to pick from
 const AVAILABLE_FIELDS = [
   { key: 'card_name', label: 'Title / Card Name', default: true },
   { key: 'set_name', label: 'Edition / Set Name', default: true },
@@ -79,7 +78,6 @@ export default function App() {
 
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Clean Auth Listener with session refresh handling for time drift
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error && error.message?.includes('JWT')) {
@@ -168,7 +166,6 @@ export default function App() {
     if (error) {
       console.error('Fetch Library Error:', error.message, error.details);
 
-      // Handle JWT future timestamp issue gracefully
       if (error.message?.includes('JWT issued at future')) {
         alert(
           'Authentication Time Sync Error:\nYour device clock is behind current server time. Please update/sync your system clock in your device settings.'
@@ -180,6 +177,9 @@ export default function App() {
       alert(`Fetch Library Failed: ${error.message}`);
       return;
     }
+
+    // DEBUG 1: Direct inspect of Supabase response for Absolute Law
+    console.log('[DEBUG 1] Raw DB Fetch:', data?.filter(c => c.card_name?.toLowerCase().includes('absolute law')));
 
     const sanitizedData = (data || []).map((item) => {
       let parsedTags = [];
@@ -203,6 +203,9 @@ export default function App() {
         tags: cleanTags,
       };
     });
+
+    // DEBUG 2: Inspect after array transformations and tag parsing
+    console.log('[DEBUG 2] Sanitized Library List:', sanitizedData.filter(c => c.card_name?.toLowerCase().includes('absolute law')));
 
     const qtyMap = {};
     sanitizedData.forEach((item) => {
@@ -535,6 +538,21 @@ export default function App() {
       activeTagFilter === 'all tags' || 
       activeTagFilter === 'all' || 
       activeTagFilter === '__all__';
+
+    // DEBUG 3: Evaluates active state parameters when running filter pipeline
+    const absoluteLawCard = libraryList.find(c => c.card_name?.toLowerCase().includes('absolute law'));
+    if (absoluteLawCard) {
+      console.log('[DEBUG 3] Absolute Law in getFilteredLibrary:', {
+        card: absoluteLawCard,
+        reg_quantity: absoluteLawCard.reg_quantity,
+        foil_quantity: absoluteLawCard.foil_quantity,
+        tags: absoluteLawCard.tags,
+        activeTagFilter: selectedTagFilter,
+        isAllTags
+      });
+    } else {
+      console.log('[DEBUG 3] Absolute Law NOT FOUND in libraryList state!');
+    }
 
     return libraryList.filter((card) => {
       const matchesSearch =
