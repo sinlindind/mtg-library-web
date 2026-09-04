@@ -22,14 +22,12 @@ const AVAILABLE_FIELDS = [
 const normalizeTags = (rawTags) => {
   if (!rawTags) return [];
   
-  // Handle array input
   if (Array.isArray(rawTags)) {
     return rawTags
       .map((t) => String(t).trim().toLowerCase())
       .filter((t) => t.length > 0);
   }
   
-  // Handle string input
   if (typeof rawTags === 'string') {
     try {
       const parsed = JSON.parse(rawTags);
@@ -81,16 +79,27 @@ export default function App() {
 
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Clean Auth listener (prevents triple re-fetching seen in console)
+  // Clean Auth Listener with session refresh handling for time drift
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error && error.message?.includes('JWT')) {
+        console.warn('JWT Time Sync Warning:', error.message);
+        supabase.auth.refreshSession();
+      } else {
+        setSession(session);
+      }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        setSession(session);
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
+      } else {
+        setSession(session);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -158,15 +167,23 @@ export default function App() {
 
     if (error) {
       console.error('Fetch Library Error:', error.message, error.details);
+
+      // Handle JWT future timestamp issue gracefully
+      if (error.message?.includes('JWT issued at future')) {
+        alert(
+          'Authentication Time Sync Error:\nYour device clock is behind current server time. Please update/sync your system clock in your device settings.'
+        );
+        await supabase.auth.refreshSession();
+        return;
+      }
+
       alert(`Fetch Library Failed: ${error.message}`);
       return;
     }
 
-    // Sanitize and normalize card data once at the boundary
     const sanitizedData = (data || []).map((item) => {
       let parsedTags = [];
 
-      // Parse stringified JSON or comma-separated tags if needed
       if (Array.isArray(item.tags)) {
         parsedTags = item.tags;
       } else if (typeof item.tags === 'string') {
@@ -177,7 +194,6 @@ export default function App() {
         }
       }
 
-      // Clean, trim, and lowercase all tag values
       const cleanTags = (Array.isArray(parsedTags) ? parsedTags : [])
         .map((t) => String(t).trim().toLowerCase())
         .filter(Boolean);
@@ -188,7 +204,6 @@ export default function App() {
       };
     });
 
-    // Build quantity lookup map
     const qtyMap = {};
     sanitizedData.forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
@@ -201,17 +216,6 @@ export default function App() {
       }
     });
 
-    // Check state before setting
-    const graceCheck = sanitizedData.find((c) =>
-      c.card_name?.toLowerCase().includes('absolute grace')
-    );
-    if (graceCheck) {
-      console.log('✅ Absolute Grace successfully loaded into state:', graceCheck);
-    } else {
-      console.log('❌ Absolute Grace not found in database response.');
-    }
-
-    // Update React state
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
   };
@@ -237,7 +241,6 @@ export default function App() {
       }
     });
 
-    console.log('Wishlist Loaded Successfully:', data);
     setWishlistMap(map);
     setWishlistList(data || []);
   };
@@ -524,11 +527,8 @@ export default function App() {
     return scryfallDataMap;
   };
 
-  // FIXED TAG FILTER LOGIC HERE
   const getFilteredLibrary = () => {
     const searchLower = (librarySearch || '').trim().toLowerCase();
-    
-    // Explicitly check for empty/default tag filter values
     const activeTagFilter = (selectedTagFilter || '').trim().toLowerCase();
     const isAllTags = 
       !activeTagFilter || 
@@ -537,17 +537,14 @@ export default function App() {
       activeTagFilter === '__all__';
 
     return libraryList.filter((card) => {
-      // 1. Search Filter
       const matchesSearch =
         !searchLower ||
         card.card_name?.toLowerCase().includes(searchLower) ||
         card.set_name?.toLowerCase().includes(searchLower);
 
-      // 2. Tag Filter
       if (!matchesSearch) return false;
-      if (isAllTags) return true; // Show ALL cards regardless of tags
+      if (isAllTags) return true;
 
-      // If filtering by a specific tag:
       const cardTags = Array.isArray(card.tags) ? card.tags : [];
       return cardTags.includes(activeTagFilter);
     });
@@ -922,7 +919,6 @@ export default function App() {
                 className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
               />
 
-              {/* Tag Dropdown with explicit empty value for 'All Tags' */}
               <select
                 value={selectedTagFilter}
                 onChange={(e) => setSelectedTagFilter(e.target.value)}
