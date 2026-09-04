@@ -179,25 +179,9 @@ export default function App() {
     }
 
     const sanitizedData = (data || []).map((item) => {
-      let parsedTags = [];
-
-      if (Array.isArray(item.tags)) {
-        parsedTags = item.tags;
-      } else if (typeof item.tags === 'string') {
-        try {
-          parsedTags = JSON.parse(item.tags);
-        } catch {
-          parsedTags = item.tags.split(',');
-        }
-      }
-
-      const cleanTags = (Array.isArray(parsedTags) ? parsedTags : [])
-        .map((t) => String(t).trim().toLowerCase())
-        .filter(Boolean);
-
       return {
         ...item,
-        tags: cleanTags,
+        tags: normalizeTags(item.tags),
       };
     });
 
