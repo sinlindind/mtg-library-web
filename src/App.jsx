@@ -196,6 +196,7 @@ export default function App() {
 
     setLibraryMap(qtyMap);
     setLibraryList(sanitizedData);
+    setSelectedTagFilter('__all__');
   };
 
   const fetchWishlist = async (userId) => {
@@ -239,7 +240,7 @@ export default function App() {
       setSearchResults(json.data || []);
     } catch (err) {
       console.error('Scryfall API search error:', err);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
@@ -507,11 +508,12 @@ export default function App() {
   const getFilteredLibrary = () => {
     const searchLower = (librarySearch || '').trim().toLowerCase();
     const activeTag = (selectedTagFilter || '').trim().toLowerCase();
+    
     const isAllTags =
       !activeTag ||
+      activeTag === '__all__' ||
       activeTag === 'all tags' ||
-      activeTag === 'all' ||
-      activeTag === '__all__';
+      activeTag === 'all';
 
     return libraryList.filter((card) => {
       const matchesSearch =
