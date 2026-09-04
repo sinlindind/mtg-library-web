@@ -240,7 +240,7 @@ export default function App() {
       setSearchResults(json.data || []);
     } catch (err) {
       console.error('Scryfall API search error:', err);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   };
