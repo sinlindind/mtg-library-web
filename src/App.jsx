@@ -62,7 +62,6 @@ export default function App() {
   const [libraryMap, setLibraryMap] = useState({});
   const [libraryList, setLibraryList] = useState([]);
   const [librarySearch, setLibrarySearch] = useState('');
-  const [librarySearchField, setLibrarySearchField] = useState('card_name');
   const [librarySort, setLibrarySort] = useState('name');
 
   const [wishlistMap, setWishlistMap] = useState({});
@@ -676,21 +675,10 @@ export default function App() {
   const filteredLibrary = libraryList.filter((card) => {
     if (!librarySearch.trim()) return true;
     const term = librarySearch.toLowerCase();
-
-    if (librarySearchField === 'card_name') {
-      return card.card_name?.toLowerCase().includes(term);
-    } else if (librarySearchField === 'set_name') {
-      return card.set_name?.toLowerCase().includes(term);
-    } else if (librarySearchField === 'tags') {
-      const tags = normalizeTags(card.tags);
-      return tags.some((t) => t.includes(term));
-    } else if (librarySearchField === 'all') {
-      const nameMatch = card.card_name?.toLowerCase().includes(term);
-      const setMatch = card.set_name?.toLowerCase().includes(term);
-      const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
-      return nameMatch || setMatch || tagMatch;
-    }
-    return true;
+    const nameMatch = card.card_name?.toLowerCase().includes(term);
+    const setMatch = card.set_name?.toLowerCase().includes(term);
+    const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
+    return nameMatch || setMatch || tagMatch;
   });
 
   const sortedLibrary = [...filteredLibrary].sort((a, b) => {
@@ -934,17 +922,6 @@ export default function App() {
                   placeholder="Filter library..."
                   className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 />
-
-                <select
-                  value={librarySearchField}
-                  onChange={(e) => setLibrarySearchField(e.target.value)}
-                  className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
-                >
-                  <option value="card_name">Search: Card Name</option>
-                  <option value="set_name">Search: Set Name</option>
-                  <option value="tags">Search: Tags</option>
-                  <option value="all">Search: All Fields</option>
-                </select>
 
                 <select
                   value={librarySort}
