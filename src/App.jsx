@@ -55,15 +55,21 @@ export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchSort, setSearchSort] = useState('name');
   const dropdownRef = useRef(null);
   const isSearchingRef = useRef(false);
 
   const [libraryMap, setLibraryMap] = useState({});
   const [libraryList, setLibraryList] = useState([]);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [librarySearchField, setLibrarySearchField] = useState('card_name');
+  const [librarySort, setLibrarySort] = useState('name');
+
   const [wishlistMap, setWishlistMap] = useState({});
   const [wishlistList, setWishlistList] = useState([]);
-  
   const [wishlistSearch, setWishlistSearch] = useState('');
+  const [wishlistSort, setWishlistSort] = useState('name');
+
   const [tagInputs, setTagInputs] = useState({});
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -222,7 +228,7 @@ export default function App() {
     setWishlistList(data || []);
   };
 
-  const executeSearch = async (searchQuery) => {
+  const executeSearch = async (searchQuery, sortOption = searchSort) => {
     if (!searchQuery.trim()) return;
     
     isSearchingRef.current = true;
@@ -233,7 +239,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `https://api.scryfall.com/cards/search?unique=prints&q=!%22${encodeURIComponent(searchQuery.trim())}%22`
+        `https://api.scryfall.com/cards/search?unique=prints&order=${sortOption}&q=!%22${encodeURIComponent(searchQuery.trim())}%22`
       );
       const json = await res.json();
       setSearchResults(json.data || []);
@@ -667,10 +673,54 @@ export default function App() {
 
   if (!session) return <Login />;
 
+  const filteredLibrary = libraryList.filter((card) => {
+    if (!librarySearch.trim()) return true;
+    const term = librarySearch.toLowerCase();
+
+    if (librarySearchField === 'card_name') {
+      return card.card_name?.toLowerCase().includes(term);
+    } else if (librarySearchField === 'set_name') {
+      return card.set_name?.toLowerCase().includes(term);
+    } else if (librarySearchField === 'tags') {
+      const tags = normalizeTags(card.tags);
+      return tags.some((t) => t.includes(term));
+    } else if (librarySearchField === 'all') {
+      const nameMatch = card.card_name?.toLowerCase().includes(term);
+      const setMatch = card.set_name?.toLowerCase().includes(term);
+      const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
+      return nameMatch || setMatch || tagMatch;
+    }
+    return true;
+  });
+
+  const sortedLibrary = [...filteredLibrary].sort((a, b) => {
+    if (librarySort === 'name') {
+      return (a.card_name || '').localeCompare(b.card_name || '');
+    } else if (librarySort === 'set') {
+      return (a.set_name || '').localeCompare(b.set_name || '');
+    } else if (librarySort === 'quantity') {
+      const totalA = (a.reg_quantity || 0) + (a.foil_quantity || 0);
+      const totalB = (b.reg_quantity || 0) + (b.foil_quantity || 0);
+      return totalB - totalA;
+    }
+    return 0;
+  });
+
   const filteredWishlist = wishlistList.filter((card) =>
     card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
     card.set_name?.toLowerCase().includes(wishlistSearch.toLowerCase())
   );
+
+  const sortedWishlist = [...filteredWishlist].sort((a, b) => {
+    if (wishlistSort === 'name') {
+      return (a.card_name || '').localeCompare(b.card_name || '');
+    } else if (wishlistSort === 'set') {
+      return (a.set_name || '').localeCompare(b.set_name || '');
+    } else if (wishlistSort === 'quantity') {
+      return (b.desired_quantity || 0) - (a.desired_quantity || 0);
+    }
+    return 0;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
@@ -739,7 +789,7 @@ export default function App() {
                     executeSearch(query);
                   }
                 }}
-                className="flex gap-3"
+                className="flex flex-wrap sm:flex-nowrap gap-3"
               >
                 <input
                   type="text"
@@ -753,6 +803,25 @@ export default function App() {
                   placeholder="Search card name (e.g. Sol Ring)..."
                   className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 />
+                
+                <select
+                  value={searchSort}
+                  onChange={(e) => {
+                    const newSort = e.target.value;
+                    setSearchSort(newSort);
+                    if (query.trim()) {
+                      executeSearch(query, newSort);
+                    }
+                  }}
+                  className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+                >
+                  <option value="name">Sort: Name</option>
+                  <option value="released">Sort: Release Date</option>
+                  <option value="set">Sort: Set Code</option>
+                  <option value="usd">Sort: Price (USD)</option>
+                  <option value="cmc">Sort: CMC</option>
+                </select>
+
                 <button
                   type="submit"
                   disabled={loading}
@@ -856,20 +925,51 @@ export default function App() {
 
         {activeTab === 'library' && (
           <div>
-            <div className="flex justify-end mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
+              <div className="flex flex-1 flex-wrap sm:flex-nowrap gap-3">
+                <input
+                  type="text"
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  placeholder="Filter library..."
+                  className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+
+                <select
+                  value={librarySearchField}
+                  onChange={(e) => setLibrarySearchField(e.target.value)}
+                  className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+                >
+                  <option value="card_name">Search: Card Name</option>
+                  <option value="set_name">Search: Set Name</option>
+                  <option value="tags">Search: Tags</option>
+                  <option value="all">Search: All Fields</option>
+                </select>
+
+                <select
+                  value={librarySort}
+                  onChange={(e) => setLibrarySort(e.target.value)}
+                  className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+                >
+                  <option value="name">Sort: Name</option>
+                  <option value="set">Sort: Set</option>
+                  <option value="quantity">Sort: Quantity</option>
+                </select>
+              </div>
+
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold cursor-pointer shadow-sm transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold cursor-pointer shadow-sm transition-colors flex items-center justify-center gap-2 shrink-0"
               >
                 📥 Export Library
               </button>
             </div>
 
             <div className="space-y-6">
-              {libraryList.length === 0 ? (
+              {sortedLibrary.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No cards found in your collection.</div>
               ) : (
-                libraryList.map((card) => {
+                sortedLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
@@ -954,21 +1054,31 @@ export default function App() {
 
         {activeTab === 'wishlist' && (
           <div>
-            <div className="mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <input
                 type="text"
                 value={wishlistSearch}
                 onChange={(e) => setWishlistSearch(e.target.value)}
                 placeholder="Search wishlist..."
-                className="w-full p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
               />
+
+              <select
+                value={wishlistSort}
+                onChange={(e) => setWishlistSort(e.target.value)}
+                className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+              >
+                <option value="name">Sort: Name</option>
+                <option value="set">Sort: Set</option>
+                <option value="quantity">Sort: Desired Quantity</option>
+              </select>
             </div>
 
             <div className="space-y-6">
-              {filteredWishlist.length === 0 ? (
+              {sortedWishlist.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">Your wishlist is empty.</div>
               ) : (
-                filteredWishlist.map((card) => {
+                sortedWishlist.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const owned = libraryMap[scryfallId] || { reg: 0, foil: 0 };
                   const totalOwned = owned.reg + owned.foil;
