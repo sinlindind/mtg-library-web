@@ -301,7 +301,7 @@ export default function App() {
       return;
     }
 
-    const scryfallId = String(card.id || card.scryfall_id).trim().toLowerCase();
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
     const current = libraryMap[scryfallId] || { reg: 0, foil: 0, tags: [] };
     const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
 
@@ -313,7 +313,7 @@ export default function App() {
         .from('user_cards')
         .delete()
         .eq('user_id', session.user.id)
-        .eq('scryfall_id', card.id || card.scryfall_id);
+        .eq('scryfall_id', scryfallId);
 
       if (error) {
         console.error('Delete Error:', error);
@@ -327,7 +327,7 @@ export default function App() {
 
     const payload = {
       user_id: session.user.id,
-      scryfall_id: card.id || card.scryfall_id,
+      scryfall_id: scryfallId,
       card_name: card.name || card.card_name,
       set_name: card.set_name,
       image_url: imgUrl,
@@ -351,7 +351,7 @@ export default function App() {
   const handleToggleWishlist = async (card) => {
     if (!session?.user?.id) return;
 
-    const scryfallId = String(card.id || card.scryfall_id).trim().toLowerCase();
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
     const isWishlisted = !!wishlistMap[scryfallId];
 
     if (isWishlisted) {
@@ -359,7 +359,7 @@ export default function App() {
         .from('user_wishlist')
         .delete()
         .eq('user_id', session.user.id)
-        .eq('scryfall_id', card.id || card.scryfall_id);
+        .eq('scryfall_id', scryfallId);
 
       if (error) console.error('Wishlist Delete Error:', error);
     } else {
@@ -369,7 +369,7 @@ export default function App() {
         .upsert(
           {
             user_id: session.user.id,
-            scryfall_id: card.id || card.scryfall_id,
+            scryfall_id: scryfallId,
             card_name: card.name || card.card_name,
             set_name: card.set_name,
             image_url: imgUrl,
@@ -400,7 +400,7 @@ export default function App() {
       .from('user_wishlist')
       .update({ desired_quantity: newQty })
       .eq('user_id', session.user.id)
-      .eq('scryfall_id', card.scryfall_id || card.id);
+      .eq('scryfall_id', scryfallId);
 
     if (error) {
       console.error('Wishlist Qty Error:', error);
@@ -447,7 +447,7 @@ export default function App() {
       .from('user_cards')
       .update({ tags: updatedTags })
       .eq('user_id', session.user.id)
-      .eq('scryfall_id', card.scryfall_id || card.id);
+      .eq('scryfall_id', scryfallId);
 
     if (error) {
       console.error('Tag Update Error:', error);
@@ -486,7 +486,7 @@ export default function App() {
       .from('user_cards')
       .update({ tags: updatedTags })
       .eq('user_id', session.user.id)
-      .eq('scryfall_id', card.scryfall_id || card.id);
+      .eq('scryfall_id', scryfallId);
 
     if (error) {
       console.error('Tag Delete Error:', error);
@@ -1049,6 +1049,7 @@ export default function App() {
               ) : (
                 paginatedLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+                  const owned = libraryMap[scryfallId] || { reg: card.reg_quantity || 0, foil: card.foil_quantity || 0 };
                   const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
                   const isDropdownOpen = activeTagDropdown === scryfallId;
@@ -1155,8 +1156,8 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold ml-1">Reg</span>
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={card.reg_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
-                            <span className="w-6 text-center text-sm font-bold">{card.reg_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={owned.reg === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                            <span className="w-6 text-center text-sm font-bold">{owned.reg}</span>
                             <button onClick={() => handleUpdateQuantity(card, false, 1)} className="w-8 h-8 bg-blue-600 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                           </div>
                         </div>
@@ -1166,8 +1167,8 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">✨ Foil</span>
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={card.foil_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
-                            <span className="w-6 text-center text-sm font-bold">{card.foil_quantity}</span>
+                            <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={owned.foil === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
+                            <span className="w-6 text-center text-sm font-bold">{owned.foil}</span>
                             <button onClick={() => handleUpdateQuantity(card, true, 1)} className="w-8 h-8 bg-amber-500 text-white rounded font-bold cursor-pointer shadow-sm">+</button>
                           </div>
                         </div>
