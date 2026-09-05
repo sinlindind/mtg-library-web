@@ -63,6 +63,8 @@ export default function App() {
   const [libraryList, setLibraryList] = useState([]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [librarySort, setLibrarySort] = useState('name');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [wishlistMap, setWishlistMap] = useState({});
   const [wishlistList, setWishlistList] = useState([]);
@@ -112,6 +114,10 @@ export default function App() {
       fetchWishlist(session.user.id);
     }
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [librarySearch, librarySort]);
 
   useEffect(() => {
     const fetchAutocomplete = async () => {
@@ -531,6 +537,12 @@ export default function App() {
     return 0;
   });
 
+  const totalPages = Math.ceil(sortedLibrary.length / itemsPerPage);
+  const paginatedLibrary = sortedLibrary.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const handleExecuteExport = async () => {
     const cardsToExport = sortedLibrary;
 
@@ -946,7 +958,7 @@ export default function App() {
               {sortedLibrary.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">No cards found in your collection.</div>
               ) : (
-                sortedLibrary.map((card) => {
+                paginatedLibrary.map((card) => {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
@@ -1026,6 +1038,28 @@ export default function App() {
                 })
               )}
             </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-3 mt-8">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
 
