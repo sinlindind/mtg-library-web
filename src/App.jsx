@@ -64,7 +64,7 @@ export default function App() {
   const [librarySearch, setLibrarySearch] = useState('');
   const [librarySort, setLibrarySort] = useState('name');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const [wishlistMap, setWishlistMap] = useState({});
   const [wishlistList, setWishlistList] = useState([]);
@@ -117,7 +117,7 @@ export default function App() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [librarySearch, librarySort]);
+  }, [librarySearch, librarySort, itemsPerPage]);
 
   useEffect(() => {
     const fetchAutocomplete = async () => {
@@ -543,6 +543,48 @@ export default function App() {
     currentPage * itemsPerPage
   );
 
+  const renderPaginationControls = () => (
+    <div className="flex flex-wrap justify-between items-center gap-4 my-6">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+          Per page:
+        </span>
+        <select
+          value={itemsPerPage}
+          onChange={(e) => setItemsPerPage(Number(e.target.value))}
+          className="p-1.5 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+        >
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+          <option value={100}>100</option>
+          <option value={200}>200</option>
+        </select>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-3">
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   const handleExecuteExport = async () => {
     const cardsToExport = sortedLibrary;
 
@@ -925,7 +967,7 @@ export default function App() {
 
         {activeTab === 'library' && (
           <div>
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-2">
               <div className="flex flex-1 flex-wrap sm:flex-nowrap gap-3">
                 <input
                   type="text"
@@ -953,6 +995,8 @@ export default function App() {
                 📥 Export Library
               </button>
             </div>
+
+            {sortedLibrary.length > 0 && renderPaginationControls()}
 
             <div className="space-y-6">
               {sortedLibrary.length === 0 ? (
@@ -1039,27 +1083,7 @@ export default function App() {
               )}
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-3 mt-8">
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 disabled:opacity-40 cursor-pointer text-sm font-semibold"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+            {sortedLibrary.length > 0 && renderPaginationControls()}
           </div>
         )}
 
