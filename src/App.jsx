@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import Login from './Login.jsx';
 
@@ -62,6 +62,7 @@ export default function App() {
   const [libraryMap, setLibraryMap] = useState({});
   const [libraryList, setLibraryList] = useState([]);
   const [librarySearch, setLibrarySearch] = useState('');
+  const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
   const [librarySort, setLibrarySort] = useState('name');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -117,7 +118,7 @@ export default function App() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [librarySearch, librarySort, itemsPerPage]);
+  }, [librarySearch, selectedTagFilter, librarySort, itemsPerPage]);
 
   useEffect(() => {
     const fetchAutocomplete = async () => {
@@ -232,6 +233,16 @@ export default function App() {
     setWishlistMap(map);
     setWishlistList(data || []);
   };
+
+  // Dynamically extract unique user-created tags across the entire library
+  const availableTags = useMemo(() => {
+    const tagSet = new Set();
+    libraryList.forEach((card) => {
+      const tags = normalizeTags(card.tags);
+      tags.forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  }, [libraryList]);
 
   const executeSearch = async (searchQuery, sortOption = searchSort) => {
     if (!searchQuery.trim()) return;
@@ -516,11 +527,17 @@ export default function App() {
   };
 
   const filteredLibrary = libraryList.filter((card) => {
+    const tags = normalizeTags(card.tags);
+    
+    if (selectedTagFilter !== 'ALL' && !tags.includes(selectedTagFilter)) {
+      return false;
+    }
+
     if (!librarySearch.trim()) return true;
     const term = librarySearch.toLowerCase();
     const nameMatch = card.card_name?.toLowerCase().includes(term);
     const setMatch = card.set_name?.toLowerCase().includes(term);
-    const tagMatch = normalizeTags(card.tags).some((t) => t.includes(term));
+    const tagMatch = tags.some((t) => t.includes(term));
     return nameMatch || setMatch || tagMatch;
   });
 
@@ -976,6 +993,19 @@ export default function App() {
                   placeholder="Filter library..."
                   className="flex-1 p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                 />
+
+                <select
+                  value={selectedTagFilter}
+                  onChange={(e) => setSelectedTagFilter(e.target.value)}
+                  className="p-3 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm cursor-pointer"
+                >
+                  <option value="ALL">Full Library (All Tags)</option>
+                  {availableTags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      🏷️ {tag}
+                    </option>
+                  ))}
+                </select>
 
                 <select
                   value={librarySort}
