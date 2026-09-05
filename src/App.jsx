@@ -73,6 +73,7 @@ export default function App() {
   const [wishlistSort, setWishlistSort] = useState('name');
 
   const [tagInputs, setTagInputs] = useState({});
+  const [activeTagDropdown, setActiveTagDropdown] = useState(null);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFields, setSelectedFields] = useState(
@@ -159,6 +160,9 @@ export default function App() {
         setShowDropdown(false);
         setSelectedIndex(-1);
       }
+      if (!e.target.closest('.tag-dropdown-container')) {
+        setActiveTagDropdown(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -234,7 +238,6 @@ export default function App() {
     setWishlistList(data || []);
   };
 
-  // Dynamically extract unique user-created tags across the entire library
   const availableTags = useMemo(() => {
     const tagSet = new Set();
     libraryList.forEach((card) => {
@@ -489,6 +492,16 @@ export default function App() {
       console.error('Tag Delete Error:', error);
       alert(`Tag Delete Error: ${error.message}`);
       await fetchLibrary(session.user.id);
+    }
+  };
+
+  const handleToggleTagCheck = async (card, tag) => {
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+    const currentTags = normalizeTags(card.tags ?? libraryMap[scryfallId]?.tags);
+    if (currentTags.includes(tag)) {
+      await handleRemoveTag(card, tag);
+    } else {
+      await handleAddTag(card, tag);
     }
   };
 
@@ -956,8 +969,8 @@ export default function App() {
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-3 min-w-[150px] w-full sm:w-auto">
-                      <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-2 rounded-lg">
+                    <div className="flex items-center gap-4 bg-slate-100 dark:bg-slate-700/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto justify-between sm:justify-start">
+                      <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold ml-1">Reg</span>
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={owned.reg === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
@@ -966,8 +979,10 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
-                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                      <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">✨ Foil</span>
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={owned.foil === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
                           <span className="w-6 text-center text-sm font-bold">{owned.foil}</span>
@@ -1036,6 +1051,7 @@ export default function App() {
                   const scryfallId = String(card.scryfall_id).trim().toLowerCase();
                   const currentTags = normalizeTags(card.tags);
                   const isWishlisted = !!wishlistMap[scryfallId];
+                  const isDropdownOpen = activeTagDropdown === scryfallId;
 
                   return (
                     <div key={card.id} className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
@@ -1072,24 +1088,71 @@ export default function App() {
                             </span>
                           ))}
 
-                          <input
-                            type="text"
-                            placeholder="+ add tag"
-                            value={tagInputs[scryfallId] || ''}
-                            onChange={(e) => setTagInputs((prev) => ({ ...prev, [scryfallId]: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddTag(card, tagInputs[scryfallId] || '');
-                              }
-                            }}
-                            className="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-28"
-                          />
+                          <div className="relative inline-block tag-dropdown-container">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTagDropdown(isDropdownOpen ? null : scryfallId)}
+                              className="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer font-medium"
+                            >
+                              + tag ▾
+                            </button>
+
+                            {isDropdownOpen && (
+                              <div className="absolute left-0 mt-1 z-30 w-56 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl space-y-2">
+                                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 border-b border-slate-200 dark:border-slate-700 pb-2">
+                                  {availableTags.length === 0 ? (
+                                    <div className="text-xs text-slate-400 px-1 italic">No existing tags</div>
+                                  ) : (
+                                    availableTags.map((tag) => {
+                                      const checked = currentTags.includes(tag);
+                                      return (
+                                        <label
+                                          key={tag}
+                                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-xs cursor-pointer select-none"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => handleToggleTagCheck(card, tag)}
+                                            className="rounded text-blue-600 focus:ring-blue-500"
+                                          />
+                                          <span className="truncate">{tag}</span>
+                                        </label>
+                                      );
+                                    })
+                                  )}
+                                </div>
+
+                                <div className="flex gap-1 pt-1">
+                                  <input
+                                    type="text"
+                                    placeholder="New tag..."
+                                    value={tagInputs[scryfallId] || ''}
+                                    onChange={(e) => setTagInputs((prev) => ({ ...prev, [scryfallId]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddTag(card, tagInputs[scryfallId] || '');
+                                      }
+                                    }}
+                                    className="flex-1 text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddTag(card, tagInputs[scryfallId] || '')}
+                                    className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium cursor-pointer"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 min-w-[150px] w-full sm:w-auto">
-                        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/60 p-2 rounded-lg">
+                      <div className="flex items-center gap-4 bg-slate-100 dark:bg-slate-700/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto justify-between sm:justify-start">
+                        <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold ml-1">Reg</span>
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => handleUpdateQuantity(card, false, -1)} disabled={card.reg_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
@@ -1098,8 +1161,10 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between bg-amber-50/60 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
-                          <span className="text-sm font-semibold text-amber-800 dark:text-amber-300 ml-1">✨ Foil</span>
+                        <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">✨ Foil</span>
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => handleUpdateQuantity(card, true, -1)} disabled={card.foil_quantity === 0} className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm">-</button>
                             <span className="w-6 text-center text-sm font-bold">{card.foil_quantity}</span>
