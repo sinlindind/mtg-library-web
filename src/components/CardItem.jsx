@@ -127,14 +127,22 @@ export default function CardItem({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleAddTag(card, tagInputVal);
+                          if (tagInputVal.trim()) {
+                            handleAddTag(card, tagInputVal.trim());
+                            if (setTagInputVal) setTagInputVal('');
+                          }
                         }
                       }}
                       className="flex-1 text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="button"
-                      onClick={() => handleAddTag(card, tagInputVal)}
+                      onClick={() => {
+                        if (tagInputVal.trim()) {
+                          handleAddTag(card, tagInputVal.trim());
+                          if (setTagInputVal) setTagInputVal('');
+                        }
+                      }}
                       className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium cursor-pointer"
                     >
                       Add
