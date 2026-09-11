@@ -29,6 +29,16 @@ export default function LibraryTab({
   const [tagInputs, setTagInputs] = useState({});
   const [activeTagDropdown, setActiveTagDropdown] = useState(null);
 
+  // Reset tag filter back to 'ALL' if the active tag filter no longer exists in availableTags
+  useEffect(() => {
+    if (
+      selectedTagFilter !== 'ALL' &&
+      !availableTags.includes(selectedTagFilter)
+    ) {
+      setSelectedTagFilter('ALL');
+    }
+  }, [availableTags, selectedTagFilter]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [librarySearch, selectedTagFilter, librarySort, itemsPerPage]);
