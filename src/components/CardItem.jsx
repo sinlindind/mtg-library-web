@@ -1,232 +1,243 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function CardItem({
   card,
-  type, // 'search' | 'library' | 'wishlist'
+  type = 'search',
   libraryMap = {},
   wishlistMap = {},
+  availableTags = [],
   setPreviewImage,
   handleToggleWishlist,
   handleUpdateQuantity,
-  handleUpdateWishlistQty,
-  // Tag Props for Library
-  currentTags = [],
-  availableTags = [],
-  isDropdownOpen = false,
-  setActiveTagDropdown,
+  handleAddTag,
   handleRemoveTag,
   handleToggleTagCheck,
-  handleAddTag,
-  tagInputVal = '',
-  setTagInputVal,
+  handleUpdateWishlistQty,
 }) {
-  const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-  const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
-  const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
-  const cardName = card.name || card.card_name;
-  
-  const owned = libraryMap[scryfallId] || { reg: card.reg_quantity || 0, foil: card.foil_quantity || 0 };
-  const totalOwned = owned.reg + owned.foil;
-  const isWishlisted = !!wishlistMap[scryfallId];
+  const [newTagInput, setNewTagInput] = useState('');
+
+  // Look up current library/wishlist status from maps
+  const libraryData = libraryMap[card.id] || {};
+  const wishlistData = wishlistMap[card.id] || {};
+
+  const qtyReg = libraryData.qty_regular || 0;
+  const qtyFoil = libraryData.qty_foil || 0;
+  const cardTags = libraryData.tags || [];
+  const totalQty = qtyReg + qtyFoil;
+
+  const inWishlist = Boolean(wishlistData.id || wishlistMap[card.id]);
+  const wishlistQty = wishlistData.requested_qty || 1;
+
+  // Extract display information safely
+  const imageUri =
+    card.image_uris?.normal ||
+    card.card_faces?.[0]?.image_uris?.normal ||
+    'https://via.placeholder.com/250x350?text=No+Image';
+
+  const priceUsd = card.prices?.usd ? `$${card.prices.usd}` : 'N/A';
+  const priceFoil = card.prices?.usd_foil ? `$${card.prices.usd_foil}` : 'N/A';
+
+  const onAddCustomTag = (e) => {
+    e.preventDefault();
+    if (!newTagInput.trim()) return;
+    if (handleAddTag) {
+      handleAddTag(card.id, newTagInput.trim());
+    }
+    setNewTagInput('');
+  };
 
   return (
-    <div className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
-      {imgUrl ? (
+    <div className="flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/50 shadow-sm hover:shadow-md transition-shadow">
+      {/* Card Image */}
+      <div className="shrink-0 flex justify-center sm:justify-start">
         <img
-          src={imgUrl}
-          alt={cardName}
-          onClick={() => setPreviewImage(type === 'search' ? highResUrl : imgUrl)}
-          className="w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0"
-          title="Click to view full resolution"
+          src={imageUri}
+          alt={card.name}
+          onClick={() => setPreviewImage && setPreviewImage(imageUri)}
+          className="w-32 h-44 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
         />
-      ) : (
-        <div className="w-56 h-80 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-xs text-slate-400 shrink-0">
-          No Image
-        </div>
-      )}
+      </div>
 
-      <div className="flex-1 space-y-3">
-        <div className="flex items-center gap-3">
-          <h3 className="font-bold text-xl">{cardName}</h3>
+      {/* Main Card Info */}
+      <div className="flex-1 flex flex-col justify-between">
+        <div>
+          <div className="flex justify-between items-start gap-2">
+            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">
+              {card.name}
+            </h3>
+            <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+              {card.set_name || card.set}
+            </span>
+          </div>
+
+          <div className="flex gap-4 mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <span>Reg: {priceUsd}</span>
+            <span>Foil: {priceFoil}</span>
+          </div>
+        </div>
+
+        {/* Wishlist Toggle Button */}
+        <div className="mt-3 flex items-center gap-3">
           <button
-            onClick={() => handleToggleWishlist(card)}
-            className="text-2xl transition-transform active:scale-125 cursor-pointer"
-            title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
+            onClick={() => handleToggleWishlist && handleToggleWishlist(card)}
+            className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+              inWishlist
+                ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300'
+            }`}
           >
-            {isWishlisted ? '❤️' : '🤍'}
+            {inWishlist ? '★ In Wishlist' : '☆ Add to Wishlist'}
           </button>
-        </div>
-        <p className="text-base text-slate-500">{card.set_name}</p>
 
-        {/* Search Context Details */}
-        {type === 'search' && totalOwned > 0 && (
-          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
-            📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
-          </span>
-        )}
-
-        {/* Library Context Tags */}
-        {type === 'library' && (
-          <div className="flex flex-wrap gap-2 items-center pt-2">
-            {currentTags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-3 py-1 rounded-full text-xs font-medium"
-              >
-                🏷️ {tag}
-                <button
-                  onClick={() => handleRemoveTag(card, tag)}
-                  className="text-slate-400 hover:text-red-500 font-bold ml-1 cursor-pointer"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-
-            <div className="relative inline-block tag-dropdown-container">
+          {type === 'wishlist' && handleUpdateWishlistQty && (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-slate-500">Wanted:</span>
               <button
-                type="button"
-                onClick={() => setActiveTagDropdown(isDropdownOpen ? null : scryfallId)}
-                className="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer font-medium"
+                onClick={() => handleUpdateWishlistQty(card.id, wishlistQty - 1)}
+                className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded"
               >
-                + tag ▾
+                -
               </button>
+              <span className="font-bold px-1">{wishlistQty}</span>
+              <button
+                onClick={() => handleUpdateWishlistQty(card.id, wishlistQty + 1)}
+                className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded"
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
 
-              {isDropdownOpen && (
-                <div className="absolute left-0 mt-1 z-30 w-56 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl space-y-2">
-                  <div className="max-h-40 overflow-y-auto space-y-1 pr-1 border-b border-slate-200 dark:border-slate-700 pb-2">
-                    {availableTags.length === 0 ? (
-                      <div className="text-xs text-slate-400 px-1 italic">No existing tags</div>
-                    ) : (
-                      availableTags.map((tag) => {
-                        const checked = currentTags.includes(tag);
-                        return (
-                          <label
-                            key={tag}
-                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-xs cursor-pointer select-none"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => handleToggleTagCheck(card, tag)}
-                              className="rounded text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="truncate">{tag}</span>
-                          </label>
-                        );
-                      })
-                    )}
-                  </div>
+        {/* Tag Management Section - Displays whenever total quantity > 0 */}
+        {totalQty > 0 && (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+              Tags:
+            </div>
 
-                  <div className="flex gap-1 pt-1">
-                    <input
-                      type="text"
-                      placeholder="New tag..."
-                      value={tagInputVal}
-                      onChange={(e) => setTagInputVal(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddTag(card, tagInputVal);
-                        }
-                      }}
-                      className="flex-1 text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleAddTag(card, tagInputVal)}
-                      className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
+            {/* Existing Active Tags */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {cardTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                >
+                  {tag}
+                  <button
+                    onClick={() => handleRemoveTag && handleRemoveTag(card.id, tag)}
+                    className="hover:text-red-500 font-bold ml-1 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {cardTags.length === 0 && (
+                <span className="text-xs text-slate-400 italic">No tags assigned</span>
               )}
             </div>
-          </div>
-        )}
 
-        {/* Wishlist Context Status */}
-        {type === 'wishlist' && (
-          totalOwned > 0 ? (
-            <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
-              📦 In Collection: {totalOwned}x
-            </span>
-          ) : (
-            <span className="inline-block bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1.5 rounded-full text-xs font-medium">
-              Not in library
-            </span>
-          )
+            {/* Checkbox Quick-Selection for Available Tags */}
+            {availableTags && availableTags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {availableTags.map((tag) => {
+                  const isChecked = cardTags.includes(tag);
+                  return (
+                    <label
+                      key={tag}
+                      className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() =>
+                          handleToggleTagCheck && handleToggleTagCheck(card.id, tag)
+                        }
+                        className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500"
+                      />
+                      {tag}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Custom Tag Input */}
+            <form onSubmit={onAddCustomTag} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add new tag..."
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                className="px-2 py-1 text-xs border rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex-1 max-w-[160px]"
+              />
+              <button
+                type="submit"
+                className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded cursor-pointer"
+              >
+                Add Tag
+              </button>
+            </form>
+          </div>
         )}
       </div>
 
-      {/* Quantity Controllers */}
-      {type !== 'wishlist' ? (
-        <div className="flex items-center gap-4 bg-slate-100 dark:bg-slate-700/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full sm:w-auto justify-between sm:justify-start">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold ml-1">Reg</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => handleUpdateQuantity(card, false, -1)}
-                disabled={owned.reg === 0}
-                className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm"
-              >
-                -
-              </button>
-              <span className="w-6 text-center text-sm font-bold">{owned.reg}</span>
-              <button
-                onClick={() => handleUpdateQuantity(card, false, 1)}
-                className="w-8 h-8 bg-blue-600 text-white rounded font-bold cursor-pointer shadow-sm"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">✨ Foil</span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => handleUpdateQuantity(card, true, -1)}
-                disabled={owned.foil === 0}
-                className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm"
-              >
-                -
-              </button>
-              <span className="w-6 text-center text-sm font-bold">{owned.foil}</span>
-              <button
-                onClick={() => handleUpdateQuantity(card, true, 1)}
-                className="w-8 h-8 bg-amber-500 text-white rounded font-bold cursor-pointer shadow-sm"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2.5 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[150px] w-full sm:w-auto">
-          <span className="text-sm font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
-          <div className="flex items-center gap-1.5">
+      {/* Quantity Adjusters */}
+      <div className="flex sm:flex-col justify-between sm:justify-center items-end gap-3 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 pt-3 sm:pt-0 sm:pl-4 min-w-[120px]">
+        {/* Regular Quantity */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Reg:</span>
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => handleUpdateWishlistQty(card, -1)}
-              className="w-8 h-8 bg-white dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+              onClick={() =>
+                handleUpdateQuantity &&
+                handleUpdateQuantity(card, 'qty_regular', Math.max(0, qtyReg - 1))
+              }
+              className="w-6 h-6 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded cursor-pointer font-bold text-xs"
             >
               -
             </button>
-            <span className="w-6 text-center text-sm font-bold text-pink-900 dark:text-pink-200">
-              {card.desired_quantity}
-            </span>
+            <span className="w-5 text-center font-semibold text-sm">{qtyReg}</span>
             <button
-              onClick={() => handleUpdateWishlistQty(card, 1)}
-              className="w-8 h-8 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
+              onClick={() =>
+                handleUpdateQuantity &&
+                handleUpdateQuantity(card, 'qty_regular', qtyReg + 1)
+              }
+              className="w-6 h-6 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded cursor-pointer font-bold text-xs"
             >
               +
             </button>
           </div>
         </div>
-      )}
+
+        {/* Foil Quantity */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+            Foil:
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() =>
+                handleUpdateQuantity &&
+                handleUpdateQuantity(card, 'qty_foil', Math.max(0, qtyFoil - 1))
+              }
+              className="w-6 h-6 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded cursor-pointer font-bold text-xs"
+            >
+              -
+            </button>
+            <span className="w-5 text-center font-semibold text-sm">{qtyFoil}</span>
+            <button
+              onClick={() =>
+                handleUpdateQuantity &&
+                handleUpdateQuantity(card, 'qty_foil', qtyFoil + 1)
+              }
+              className="w-6 h-6 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded cursor-pointer font-bold text-xs"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
