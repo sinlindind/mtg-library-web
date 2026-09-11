@@ -5,8 +5,12 @@ import { fetchAutocompleteSuggestions, fetchScryfallSearch } from '../services/s
 export default function SearchTab({
   libraryMap,
   wishlistMap,
+  availableTags,
   handleUpdateQuantity,
   handleToggleWishlist,
+  handleAddTag,
+  handleRemoveTag,
+  handleToggleTagCheck,
   setPreviewImage,
   searchResults,
   setSearchResults,
@@ -193,9 +197,13 @@ export default function SearchTab({
             type="search"
             libraryMap={libraryMap}
             wishlistMap={wishlistMap}
+            availableTags={availableTags}
             setPreviewImage={setPreviewImage}
             handleToggleWishlist={handleToggleWishlist}
             handleUpdateQuantity={handleUpdateQuantity}
+            handleAddTag={handleAddTag}
+            handleRemoveTag={handleRemoveTag}
+            handleToggleTagCheck={handleToggleTagCheck}
           />
         ))}
       </div>
