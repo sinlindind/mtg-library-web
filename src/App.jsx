@@ -147,8 +147,12 @@ export default function App() {
           <SearchTab
             libraryMap={libraryMap}
             wishlistMap={wishlistMap}
+            availableTags={availableTags}
             handleUpdateQuantity={handleUpdateQuantity}
             handleToggleWishlist={handleToggleWishlist}
+            handleAddTag={handleAddTag}
+            handleRemoveTag={handleRemoveTag}
+            handleToggleTagCheck={handleToggleTagCheck}
             setPreviewImage={setPreviewImage}
             searchResults={searchResults}
             setSearchResults={setSearchResults}

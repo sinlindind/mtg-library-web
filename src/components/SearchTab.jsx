@@ -5,8 +5,12 @@ import { fetchAutocompleteSuggestions, fetchScryfallSearch } from '../services/s
 export default function SearchTab({
   libraryMap,
   wishlistMap,
+  availableTags,
   handleUpdateQuantity,
   handleToggleWishlist,
+  handleAddTag,
+  handleRemoveTag,
+  handleToggleTagCheck,
   setPreviewImage,
   searchResults,
   setSearchResults,
@@ -17,6 +21,10 @@ export default function SearchTab({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [searchSort, setSearchSort] = useState('name');
+
+  // Tag state management for Search tab cards
+  const [activeTagDropdown, setActiveTagDropdown] = useState(null);
+  const [tagInputVal, setTagInputVal] = useState('');
 
   const dropdownRef = useRef(null);
   const isSearchingRef = useRef(false);
@@ -50,11 +58,15 @@ export default function SearchTab({
     return () => clearTimeout(timer);
   }, [query]);
 
+  // Close tag dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false);
         setSelectedIndex(-1);
+      }
+      if (!e.target.closest('.tag-dropdown-container')) {
+        setActiveTagDropdown(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -186,18 +198,36 @@ export default function SearchTab({
       </div>
 
       <div className="space-y-6">
-        {searchResults.map((card) => (
-          <CardItem
-            key={card.id}
-            card={card}
-            type="search"
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            setPreviewImage={setPreviewImage}
-            handleToggleWishlist={handleToggleWishlist}
-            handleUpdateQuantity={handleUpdateQuantity}
-          />
-        ))}
+        {searchResults.map((card) => {
+          const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+          const libraryEntry = libraryMap[scryfallId] || {};
+          const currentTags = libraryEntry.tags || [];
+
+          return (
+            <CardItem
+              key={card.id}
+              card={card}
+              type="search"
+              libraryMap={libraryMap}
+              wishlistMap={wishlistMap}
+              availableTags={availableTags}
+              currentTags={currentTags}
+              isDropdownOpen={activeTagDropdown === scryfallId}
+              setActiveTagDropdown={setActiveTagDropdown}
+              tagInputVal={tagInputVal}
+              setTagInputVal={setTagInputVal}
+              setPreviewImage={setPreviewImage}
+              handleToggleWishlist={handleToggleWishlist}
+              handleUpdateQuantity={handleUpdateQuantity}
+              handleAddTag={(c, tag) => {
+                handleAddTag(c, tag);
+                setTagInputVal('');
+              }}
+              handleRemoveTag={handleRemoveTag}
+              handleToggleTagCheck={handleToggleTagCheck}
+            />
+          );
+        })}
       </div>
     </div>
   );
