@@ -168,30 +168,53 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Bypasses 1000 row Supabase cap by fetching in pages of 1,000 until finished
   const fetchLibrary = async (userId) => {
     if (!userId) return;
 
-    const { data, error } = await supabase
-      .from('user_cards')
-      .select('id, scryfall_id, card_name, set_name, image_url, reg_quantity, foil_quantity, tags')
-      .eq('user_id', userId);
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.error('Fetch Library Error:', error.message, error.details);
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
 
-      if (error.message?.includes('JWT issued at future')) {
-        alert(
-          'Authentication Time Sync Error:\nYour device clock is behind current server time. Please update/sync your system clock in your device settings.'
-        );
-        await supabase.auth.refreshSession();
+      const { data, error } = await supabase
+        .from('user_cards')
+        .select('id, scryfall_id, card_name, set_name, image_url, reg_quantity, foil_quantity, tags')
+        .eq('user_id', userId)
+        .range(from, to);
+
+      if (error) {
+        console.error('Fetch Library Error:', error.message, error.details);
+
+        if (error.message?.includes('JWT issued at future')) {
+          alert(
+            'Authentication Time Sync Error:\nYour device clock is behind current server time. Please update/sync your system clock in your device settings.'
+          );
+          await supabase.auth.refreshSession();
+          return;
+        }
+
+        alert(`Fetch Library Failed: ${error.message}`);
         return;
       }
 
-      alert(`Fetch Library Failed: ${error.message}`);
-      return;
+      if (data && data.length > 0) {
+        allData = allData.concat(data);
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
 
-    const sanitizedData = (data || []).map((item) => ({
+    const sanitizedData = allData.map((item) => ({
       ...item,
       tags: normalizeTags(item.tags),
     }));
@@ -212,22 +235,45 @@ export default function App() {
     setLibraryList(sanitizedData);
   };
 
+  // Bypasses 1000 row Supabase cap for Wishlist as well
   const fetchWishlist = async (userId) => {
     if (!userId) return;
 
-    const { data, error } = await supabase
-      .from('user_wishlist')
-      .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
-      .eq('user_id', userId);
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.error('Fetch Wishlist Error:', error.message, error.details);
-      alert(`Fetch Wishlist Failed: ${error.message}`);
-      return;
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error } = await supabase
+        .from('user_wishlist')
+        .select('id, scryfall_id, card_name, set_name, image_url, desired_quantity')
+        .eq('user_id', userId)
+        .range(from, to);
+
+      if (error) {
+        console.error('Fetch Wishlist Error:', error.message, error.details);
+        alert(`Fetch Wishlist Failed: ${error.message}`);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        allData = allData.concat(data);
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
 
     const map = {};
-    (data || []).forEach((item) => {
+    allData.forEach((item) => {
       const cleanSid = String(item.scryfall_id || '').trim().toLowerCase();
       if (cleanSid) {
         map[cleanSid] = item.desired_quantity || 1;
@@ -235,7 +281,7 @@ export default function App() {
     });
 
     setWishlistMap(map);
-    setWishlistList(data || []);
+    setWishlistList(allData);
   };
 
   const availableTags = useMemo(() => {
@@ -264,7 +310,7 @@ export default function App() {
       setSearchResults(json.data || []);
     } catch (err) {
       console.error('Scryfall API search error:', err);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
