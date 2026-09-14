@@ -119,6 +119,9 @@ export default function LibraryTab({
             case 'foil_quantity':
               record['Foil Qty'] = item.foil_quantity || 0;
               break;
+            case 'scryfall_id':
+              record['Scryfall ID'] = item.scryfall_id || scryfallObj.id || '';
+              break;
             case 'mana_cost':
               record['Mana Cost'] = scryfallObj.mana_cost || '';
               break;

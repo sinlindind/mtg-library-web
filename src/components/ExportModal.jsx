@@ -5,6 +5,7 @@ export const AVAILABLE_FIELDS = [
   { key: 'set_name', label: 'Edition / Set Name', default: true },
   { key: 'reg_quantity', label: 'Regular Quantity', default: true },
   { key: 'foil_quantity', label: 'Foil Quantity', default: true },
+  { key: 'scryfall_id', label: 'Scryfall ID', default: false },
   { key: 'mana_cost', label: 'Mana Cost', default: false },
   { key: 'type_line', label: 'Type Line', default: false },
   { key: 'oracle_text', label: 'Oracle Text', default: false },
