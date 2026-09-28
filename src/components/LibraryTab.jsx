@@ -102,6 +102,8 @@ export default function LibraryTab({
   const filteredLibrary = useMemo(() => {
     return libraryList.filter((card) => {
       const tags = normalizeTags(card.tags);
+      const scryfallId = String(card.scryfall_id || '').toLowerCase();
+      const meta = libraryMap?.[scryfallId] || {};
 
       // Tag Filter
       if (selectedTagFilter !== 'ALL' && !tags.includes(selectedTagFilter)) {
@@ -111,35 +113,42 @@ export default function LibraryTab({
       // General Text Search (Name, Set, Tags)
       if (librarySearch.trim()) {
         const term = librarySearch.toLowerCase();
-        const nameMatch = card.card_name?.toLowerCase().includes(term);
-        const setMatch = card.set_name?.toLowerCase().includes(term);
+        const cardName = (card.card_name || meta.name || '').toLowerCase();
+        const setName = (card.set_name || meta.set_name || '').toLowerCase();
+        const nameMatch = cardName.includes(term);
+        const setMatch = setName.includes(term);
         const tagMatch = tags.some((t) => t.includes(term));
         if (!nameMatch && !setMatch && !tagMatch) return false;
       }
 
-      // Type Line Filter (if card has type_line populated)
+      // Type Line Filter
+      const typeLine = card.type_line || meta.type_line || '';
       if (selectedType !== 'ALL') {
-        if (card.type_line && !card.type_line.toLowerCase().includes(selectedType.toLowerCase())) {
+        if (!typeLine.toLowerCase().includes(selectedType.toLowerCase())) {
           return false;
         }
       }
 
       // Rarity Filter
+      const rarity = card.rarity || meta.rarity || '';
       if (selectedRarity !== 'ALL') {
-        if (card.rarity && card.rarity.toLowerCase() !== selectedRarity.toLowerCase()) {
+        if (rarity.toLowerCase() !== selectedRarity.toLowerCase()) {
           return false;
         }
       }
 
       // Mana Cost (CMC) Filter
-      if (card.cmc !== undefined && card.cmc !== null) {
-        if (minCmc !== '' && card.cmc < parseFloat(minCmc)) return false;
-        if (maxCmc !== '' && card.cmc > parseFloat(maxCmc)) return false;
+      const cmc = card.cmc ?? meta.cmc;
+      if (minCmc !== '' && (cmc === undefined || cmc < parseFloat(minCmc))) {
+        return false;
+      }
+      if (maxCmc !== '' && (cmc === undefined || cmc > parseFloat(maxCmc))) {
+        return false;
       }
 
-      // Color Filter (Matches if card contains all selected colors)
+      // Color / Color Identity Filter
       if (selectedColors.length > 0) {
-        const cardColors = card.colors || card.color_identity || [];
+        const cardColors = card.colors || meta.colors || card.color_identity || meta.color_identity || [];
         if (selectedColors.includes('C')) {
           if (cardColors.length > 0) return false;
         } else {
@@ -152,6 +161,7 @@ export default function LibraryTab({
     });
   }, [
     libraryList,
+    libraryMap,
     selectedTagFilter,
     librarySearch,
     selectedType,
@@ -163,20 +173,31 @@ export default function LibraryTab({
 
   const sortedLibrary = useMemo(() => {
     return [...filteredLibrary].sort((a, b) => {
+      const scryfallIdA = String(a.scryfall_id || '').toLowerCase();
+      const scryfallIdB = String(b.scryfall_id || '').toLowerCase();
+      const metaA = libraryMap?.[scryfallIdA] || {};
+      const metaB = libraryMap?.[scryfallIdB] || {};
+
       if (librarySort === 'name') {
-        return (a.card_name || '').localeCompare(b.card_name || '');
+        const nameA = a.card_name || metaA.name || '';
+        const nameB = b.card_name || metaB.name || '';
+        return nameA.localeCompare(nameB);
       } else if (librarySort === 'set') {
-        return (a.set_name || '').localeCompare(b.set_name || '');
+        const setA = a.set_name || metaA.set_name || '';
+        const setB = b.set_name || metaB.set_name || '';
+        return setA.localeCompare(setB);
       } else if (librarySort === 'quantity') {
         const totalA = (a.reg_quantity || 0) + (a.foil_quantity || 0);
         const totalB = (b.reg_quantity || 0) + (b.foil_quantity || 0);
         return totalB - totalA;
       } else if (librarySort === 'cmc') {
-        return (a.cmc || 0) - (b.cmc || 0);
+        const cmcA = a.cmc ?? metaA.cmc ?? 0;
+        const cmcB = b.cmc ?? metaB.cmc ?? 0;
+        return cmcA - cmcB;
       }
       return 0;
     });
-  }, [filteredLibrary, librarySort]);
+  }, [filteredLibrary, libraryMap, librarySort]);
 
   const totalPages = Math.ceil(sortedLibrary.length / itemsPerPage);
   const paginatedLibrary = sortedLibrary.slice(
