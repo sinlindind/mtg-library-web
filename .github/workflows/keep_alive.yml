@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs every 3 days at 00:00 UTC
     - cron: '0 0 */3 * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Ping Supabase Database
         run: |
-          curl -i -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/user_cards?select=id&limit=1" \
+          curl -i -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/pg_sleep" \
           -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{"seconds": 0}'
