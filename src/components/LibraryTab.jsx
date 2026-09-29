@@ -36,7 +36,7 @@ export default function LibraryTab({
   const [librarySearch, setLibrarySearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
   const [librarySort, setLibrarySort] = useState('name');
-  
+
   // Dedicated MTG Property Filters State
   const [selectedColors, setSelectedColors] = useState([]);
   const [selectedType, setSelectedType] = useState('ALL');
@@ -99,6 +99,21 @@ export default function LibraryTab({
     setMaxCmc('');
   };
 
+  // Helper to resolve card metadata from map across multiple potential key casing formats
+  const getCardMetadata = (rawId) => {
+    if (!rawId || !libraryMap) return {};
+    const exactId = String(rawId).trim();
+    const lowerId = exactId.toLowerCase();
+    const upperId = exactId.toUpperCase();
+
+    return (
+      libraryMap[exactId] ||
+      libraryMap[lowerId] ||
+      libraryMap[upperId] ||
+      {}
+    );
+  };
+
   const filteredLibrary = useMemo(() => {
     const isFilterActive =
       selectedTagFilter !== 'ALL' ||
@@ -109,27 +124,12 @@ export default function LibraryTab({
       maxCmc !== '' ||
       selectedColors.length > 0;
 
-    if (isFilterActive) {
-      console.groupCollapsed('🔍 [LibraryTab Debug Log] Filtering Run');
-      console.log('Active Filter State:', {
-        selectedTagFilter,
-        librarySearch,
-        selectedType,
-        selectedRarity,
-        minCmc,
-        maxCmc,
-        selectedColors,
-      });
-      console.log('Total Library Items Input:', libraryList?.length || 0);
-      console.log('Library Metadata Map Keys Loaded:', Object.keys(libraryMap || {}).length);
-    }
-
     const result = (libraryList || []).filter((card, index) => {
       const tags = normalizeTags(card.tags);
-      const scryfallId = String(card.scryfall_id || '').trim().toLowerCase();
-      const meta = libraryMap?.[scryfallId] || {};
+      const rawScryfallId = card.scryfall_id || card.id || '';
+      const meta = getCardMetadata(rawScryfallId);
 
-      // 1. Extract Type Line (supporting dual-faced cards)
+      // 1. Extract Type Line
       let typeLine = card.type_line || meta.type_line || '';
       if (!typeLine && meta.card_faces) {
         typeLine = meta.card_faces.map((f) => f.type_line || '').join(' // ');
@@ -138,7 +138,7 @@ export default function LibraryTab({
       // 2. Extract Rarity
       const rarity = card.rarity || meta.rarity || '';
 
-      // 3. Extract CMC
+      // 3. Extract Mana Value (CMC)
       let cmc = card.cmc ?? meta.cmc;
       if (cmc === undefined || cmc === null) {
         if (meta.card_faces && meta.card_faces[0]?.cmc !== undefined) {
@@ -146,33 +146,34 @@ export default function LibraryTab({
         }
       }
 
-      // 4. Extract Colors & Identity (supporting card_faces)
+      // 4. Extract Color Arrays
       let cardColors = card.colors || meta.colors;
       if (!cardColors && meta.card_faces) {
         cardColors = meta.card_faces.reduce((acc, f) => [...acc, ...(f.colors || [])], []);
       }
-      if (!cardColors || cardColors.length === 0) {
+      if (!cardColors) {
         cardColors = card.color_identity || meta.color_identity || [];
       }
 
-      // --- Filter Evaluation --- //
+      // Normalize array elements to uppercase
+      cardColors = (cardColors || []).map((c) => String(c).toUpperCase());
+
+      // --- Filter Evaluations --- //
 
       // Tag Filter
       if (selectedTagFilter !== 'ALL' && !tags.includes(selectedTagFilter)) {
-        if (index < 5) console.log(`[Card #${index} Rejected - Tag Mismatch]:`, card.card_name, { tags, selectedTagFilter });
         return false;
       }
 
-      // General Text Search
+      // Search Filter
       if (librarySearch.trim()) {
         const term = librarySearch.toLowerCase();
         const cardName = (card.card_name || meta.name || meta.card_name || '').toLowerCase();
         const setName = (card.set_name || meta.set_name || '').toLowerCase();
         const nameMatch = cardName.includes(term);
         const setMatch = setName.includes(term);
-        const tagMatch = tags.some((t) => t.includes(term));
+        const tagMatch = tags.some((t) => t.toLowerCase().includes(term));
         if (!nameMatch && !setMatch && !tagMatch) {
-          if (index < 5) console.log(`[Card #${index} Rejected - Search Mismatch]:`, cardName, { term });
           return false;
         }
       }
@@ -180,7 +181,6 @@ export default function LibraryTab({
       // Type Line Filter
       if (selectedType !== 'ALL') {
         if (!typeLine.toLowerCase().includes(selectedType.toLowerCase())) {
-          if (index < 5) console.log(`[Card #${index} Rejected - Type Mismatch]:`, card.card_name, { typeLine, selectedType });
           return false;
         }
       }
@@ -188,48 +188,41 @@ export default function LibraryTab({
       // Rarity Filter
       if (selectedRarity !== 'ALL') {
         if (rarity.toLowerCase() !== selectedRarity.toLowerCase()) {
-          if (index < 5) console.log(`[Card #${index} Rejected - Rarity Mismatch]:`, card.card_name, { rarity, selectedRarity });
           return false;
         }
       }
 
-      // Mana Cost (CMC) Filter
-      if (minCmc !== '' && (cmc === undefined || cmc === null || Number(cmc) < parseFloat(minCmc))) {
-        if (index < 5) console.log(`[Card #${index} Rejected - Min CMC Mismatch]:`, card.card_name, { cmc, minCmc });
-        return false;
+      // Mana Value (CMC) Range Filter
+      if (minCmc !== '') {
+        const numMin = parseFloat(minCmc);
+        if (cmc === undefined || cmc === null || Number(cmc) < numMin) {
+          return false;
+        }
       }
-      if (maxCmc !== '' && (cmc === undefined || cmc === null || Number(cmc) > parseFloat(maxCmc))) {
-        if (index < 5) console.log(`[Card #${index} Rejected - Max CMC Mismatch]:`, card.card_name, { cmc, maxCmc });
-        return false;
+      if (maxCmc !== '') {
+        const numMax = parseFloat(maxCmc);
+        if (cmc === undefined || cmc === null || Number(cmc) > numMax) {
+          return false;
+        }
       }
 
-      // Color Filter
+      // Color / Colorless Filter
       if (selectedColors.length > 0) {
         if (selectedColors.includes('C')) {
           if (cardColors.length > 0) {
-            if (index < 5) console.log(`[Card #${index} Rejected - Not Colorless]:`, card.card_name, { cardColors });
             return false;
           }
         } else {
-          const hasAllSelected = selectedColors.every((c) => cardColors.includes(c));
-          if (!hasAllSelected) {
-            if (index < 5) console.log(`[Card #${index} Rejected - Color Mismatch]:`, card.card_name, { cardColors, selectedColors });
+          // Check if card matches any selected color (or all if strict behavior is desired)
+          const matchesColor = selectedColors.some((c) => cardColors.includes(c));
+          if (!matchesColor) {
             return false;
           }
         }
       }
 
-      if (index < 5 && isFilterActive) {
-        console.log(`[Card #${index} PASSED]:`, card.card_name || meta.name, { scryfallId, metaResolved: Boolean(meta.id), typeLine, rarity, cmc, cardColors });
-      }
-
       return true;
     });
-
-    if (isFilterActive) {
-      console.log('Filtered Results Count:', result.length);
-      console.groupEnd();
-    }
 
     return result;
   }, [
@@ -246,10 +239,10 @@ export default function LibraryTab({
 
   const sortedLibrary = useMemo(() => {
     return [...filteredLibrary].sort((a, b) => {
-      const scryfallIdA = String(a.scryfall_id || '').toLowerCase();
-      const scryfallIdB = String(b.scryfall_id || '').toLowerCase();
-      const metaA = libraryMap?.[scryfallIdA] || {};
-      const metaB = libraryMap?.[scryfallIdB] || {};
+      const rawIdA = a.scryfall_id || a.id || '';
+      const rawIdB = b.scryfall_id || b.id || '';
+      const metaA = getCardMetadata(rawIdA);
+      const metaB = getCardMetadata(rawIdB);
 
       if (librarySort === 'name') {
         const nameA = a.card_name || metaA.name || metaA.card_name || '';
@@ -293,7 +286,8 @@ export default function LibraryTab({
       const scryfallMap = await fetchScryfallDetailsChunked(cardsToExport, setExportProgress);
 
       const exportedData = cardsToExport.map((item) => {
-        const scryfallObj = scryfallMap[String(item.scryfall_id).toLowerCase()] || {};
+        const rawId = item.scryfall_id || item.id || '';
+        const scryfallObj = scryfallMap[String(rawId).toLowerCase()] || scryfallMap[rawId] || {};
         const record = {};
 
         selectedFields.forEach((fieldKey) => {
@@ -636,7 +630,7 @@ export default function LibraryTab({
           </div>
         ) : (
           paginatedLibrary.map((card) => {
-            const scryfallId = String(card.scryfall_id || '').trim().toLowerCase();
+            const scryfallId = String(card.scryfall_id || card.id || '').trim();
             const currentTags = normalizeTags(card.tags);
             const isDropdownOpen = activeTagDropdown === scryfallId;
 
