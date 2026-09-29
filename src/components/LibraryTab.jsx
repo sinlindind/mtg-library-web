@@ -598,3 +598,92 @@ export default function LibraryTab({
     </div>
   );
 }
+
+const filteredLibrary = useMemo(() => {
+    // 🔍 DIAGNOSTIC LOGS
+    console.group("Library Debug Snapshot");
+    console.log("Total Cards in libraryList:", libraryList?.length);
+    console.log("Sample card from libraryList:", libraryList?.[0]);
+    console.log("libraryMap Keys:", Object.keys(libraryMap || {}));
+    console.log("Sample metadata in libraryMap:", libraryMap ? libraryMap[Object.keys(libraryMap)[0]] : null);
+    console.log("Active Filters:", {
+      selectedTagFilter,
+      librarySearch,
+      selectedType,
+      selectedRarity,
+      minCmc,
+      maxCmc,
+      selectedColors,
+    });
+    console.groupEnd();
+
+    return libraryList.filter((card) => {
+      const tags = normalizeTags(card.tags);
+      const scryfallId = String(card.scryfall_id || '').toLowerCase();
+      const meta = libraryMap?.[scryfallId] || {};
+
+      // Tag Filter
+      if (selectedTagFilter !== 'ALL' && !tags.includes(selectedTagFilter)) {
+        return false;
+      }
+
+      // General Text Search (Name, Set, Tags)
+      if (librarySearch.trim()) {
+        const term = librarySearch.toLowerCase();
+        const cardName = (card.card_name || meta.name || '').toLowerCase();
+        const setName = (card.set_name || meta.set_name || '').toLowerCase();
+        const nameMatch = cardName.includes(term);
+        const setMatch = setName.includes(term);
+        const tagMatch = tags.some((t) => t.includes(term));
+        if (!nameMatch && !setMatch && !tagMatch) return false;
+      }
+
+      // Type Line Filter
+      const typeLine = card.type_line || meta.type_line || '';
+      if (selectedType !== 'ALL') {
+        if (!typeLine.toLowerCase().includes(selectedType.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Rarity Filter
+      const rarity = card.rarity || meta.rarity || '';
+      if (selectedRarity !== 'ALL') {
+        if (rarity.toLowerCase() !== selectedRarity.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Mana Cost (CMC) Filter
+      const cmc = card.cmc ?? meta.cmc;
+      if (minCmc !== '' && (cmc === undefined || cmc < parseFloat(minCmc))) {
+        return false;
+      }
+      if (maxCmc !== '' && (cmc === undefined || cmc > parseFloat(maxCmc))) {
+        return false;
+      }
+
+      // Color / Color Identity Filter
+      if (selectedColors.length > 0) {
+        const cardColors = card.colors || meta.colors || card.color_identity || meta.color_identity || [];
+        if (selectedColors.includes('C')) {
+          if (cardColors.length > 0) return false;
+        } else {
+          const hasAllSelected = selectedColors.every((c) => cardColors.includes(c));
+          if (!hasAllSelected) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    libraryList,
+    libraryMap,
+    selectedTagFilter,
+    librarySearch,
+    selectedType,
+    selectedRarity,
+    minCmc,
+    maxCmc,
+    selectedColors,
+  ]);
