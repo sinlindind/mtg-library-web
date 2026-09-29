@@ -100,23 +100,6 @@ export default function LibraryTab({
   };
 
   const filteredLibrary = useMemo(() => {
-    // 🔍 DIAGNOSTIC LOGS FOR REVIEW
-    console.group('🔍 Library Debug Snapshot');
-    console.log('Total Cards in libraryList:', libraryList?.length);
-    console.log('Sample card from libraryList:', libraryList?.[0]);
-    console.log('libraryMap Keys:', Object.keys(libraryMap || {}));
-    console.log('Sample metadata in libraryMap:', libraryMap ? libraryMap[Object.keys(libraryMap)[0]] : null);
-    console.log('Active Filters:', {
-      selectedTagFilter,
-      librarySearch,
-      selectedType,
-      selectedRarity,
-      minCmc,
-      maxCmc,
-      selectedColors,
-    });
-    console.groupEnd();
-
     return (libraryList || []).filter((card) => {
       const tags = normalizeTags(card.tags);
       const scryfallId = String(card.scryfall_id || '').toLowerCase();
@@ -130,7 +113,7 @@ export default function LibraryTab({
       // General Text Search (Name, Set, Tags)
       if (librarySearch.trim()) {
         const term = librarySearch.toLowerCase();
-        const cardName = (card.card_name || meta.name || '').toLowerCase();
+        const cardName = (card.card_name || meta.name || meta.card_name || '').toLowerCase();
         const setName = (card.set_name || meta.set_name || '').toLowerCase();
         const nameMatch = cardName.includes(term);
         const setMatch = setName.includes(term);
@@ -156,16 +139,22 @@ export default function LibraryTab({
 
       // Mana Cost (CMC) Filter
       const cmc = card.cmc ?? meta.cmc;
-      if (minCmc !== '' && (cmc === undefined || cmc < parseFloat(minCmc))) {
+      if (minCmc !== '' && (cmc === undefined || cmc === null || cmc < parseFloat(minCmc))) {
         return false;
       }
-      if (maxCmc !== '' && (cmc === undefined || cmc > parseFloat(maxCmc))) {
+      if (maxCmc !== '' && (cmc === undefined || cmc === null || cmc > parseFloat(maxCmc))) {
         return false;
       }
 
       // Color / Color Identity Filter
       if (selectedColors.length > 0) {
-        const cardColors = card.colors || meta.colors || card.color_identity || meta.color_identity || [];
+        const cardColors =
+          card.colors ||
+          meta.colors ||
+          card.color_identity ||
+          meta.color_identity ||
+          [];
+
         if (selectedColors.includes('C')) {
           if (cardColors.length > 0) return false;
         } else {
@@ -196,8 +185,8 @@ export default function LibraryTab({
       const metaB = libraryMap?.[scryfallIdB] || {};
 
       if (librarySort === 'name') {
-        const nameA = a.card_name || metaA.name || '';
-        const nameB = b.card_name || metaB.name || '';
+        const nameA = a.card_name || metaA.name || metaA.card_name || '';
+        const nameB = b.card_name || metaB.name || metaB.card_name || '';
         return nameA.localeCompare(nameB);
       } else if (librarySort === 'set') {
         const setA = a.set_name || metaA.set_name || '';
@@ -316,7 +305,7 @@ export default function LibraryTab({
 
         const csvString = csvRows.join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
+        const url = URL.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
         link.setAttribute('download', 'mtg_library.csv');
@@ -580,13 +569,13 @@ export default function LibraryTab({
           </div>
         ) : (
           paginatedLibrary.map((card) => {
-            const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+            const scryfallId = String(card.scryfall_id || '').trim().toLowerCase();
             const currentTags = normalizeTags(card.tags);
             const isDropdownOpen = activeTagDropdown === scryfallId;
 
             return (
               <CardItem
-                key={card.id}
+                key={card.id || scryfallId}
                 card={card}
                 type="library"
                 libraryMap={libraryMap}
