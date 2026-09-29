@@ -100,17 +100,70 @@ export default function LibraryTab({
   };
 
   const filteredLibrary = useMemo(() => {
-    return (libraryList || []).filter((card) => {
+    const isFilterActive =
+      selectedTagFilter !== 'ALL' ||
+      librarySearch.trim() !== '' ||
+      selectedType !== 'ALL' ||
+      selectedRarity !== 'ALL' ||
+      minCmc !== '' ||
+      maxCmc !== '' ||
+      selectedColors.length > 0;
+
+    if (isFilterActive) {
+      console.groupCollapsed('🔍 [LibraryTab Debug Log] Filtering Run');
+      console.log('Active Filter State:', {
+        selectedTagFilter,
+        librarySearch,
+        selectedType,
+        selectedRarity,
+        minCmc,
+        maxCmc,
+        selectedColors,
+      });
+      console.log('Total Library Items Input:', libraryList?.length || 0);
+      console.log('Library Metadata Map Keys Loaded:', Object.keys(libraryMap || {}).length);
+    }
+
+    const result = (libraryList || []).filter((card, index) => {
       const tags = normalizeTags(card.tags);
-      const scryfallId = String(card.scryfall_id || '').toLowerCase();
+      const scryfallId = String(card.scryfall_id || '').trim().toLowerCase();
       const meta = libraryMap?.[scryfallId] || {};
+
+      // 1. Extract Type Line (supporting dual-faced cards)
+      let typeLine = card.type_line || meta.type_line || '';
+      if (!typeLine && meta.card_faces) {
+        typeLine = meta.card_faces.map((f) => f.type_line || '').join(' // ');
+      }
+
+      // 2. Extract Rarity
+      const rarity = card.rarity || meta.rarity || '';
+
+      // 3. Extract CMC
+      let cmc = card.cmc ?? meta.cmc;
+      if (cmc === undefined || cmc === null) {
+        if (meta.card_faces && meta.card_faces[0]?.cmc !== undefined) {
+          cmc = meta.card_faces[0].cmc;
+        }
+      }
+
+      // 4. Extract Colors & Identity (supporting card_faces)
+      let cardColors = card.colors || meta.colors;
+      if (!cardColors && meta.card_faces) {
+        cardColors = meta.card_faces.reduce((acc, f) => [...acc, ...(f.colors || [])], []);
+      }
+      if (!cardColors || cardColors.length === 0) {
+        cardColors = card.color_identity || meta.color_identity || [];
+      }
+
+      // --- Filter Evaluation --- //
 
       // Tag Filter
       if (selectedTagFilter !== 'ALL' && !tags.includes(selectedTagFilter)) {
+        if (index < 5) console.log(`[Card #${index} Rejected - Tag Mismatch]:`, card.card_name, { tags, selectedTagFilter });
         return false;
       }
 
-      // General Text Search (Name, Set, Tags)
+      // General Text Search
       if (librarySearch.trim()) {
         const term = librarySearch.toLowerCase();
         const cardName = (card.card_name || meta.name || meta.card_name || '').toLowerCase();
@@ -118,53 +171,67 @@ export default function LibraryTab({
         const nameMatch = cardName.includes(term);
         const setMatch = setName.includes(term);
         const tagMatch = tags.some((t) => t.includes(term));
-        if (!nameMatch && !setMatch && !tagMatch) return false;
+        if (!nameMatch && !setMatch && !tagMatch) {
+          if (index < 5) console.log(`[Card #${index} Rejected - Search Mismatch]:`, cardName, { term });
+          return false;
+        }
       }
 
       // Type Line Filter
-      const typeLine = card.type_line || meta.type_line || '';
       if (selectedType !== 'ALL') {
         if (!typeLine.toLowerCase().includes(selectedType.toLowerCase())) {
+          if (index < 5) console.log(`[Card #${index} Rejected - Type Mismatch]:`, card.card_name, { typeLine, selectedType });
           return false;
         }
       }
 
       // Rarity Filter
-      const rarity = card.rarity || meta.rarity || '';
       if (selectedRarity !== 'ALL') {
         if (rarity.toLowerCase() !== selectedRarity.toLowerCase()) {
+          if (index < 5) console.log(`[Card #${index} Rejected - Rarity Mismatch]:`, card.card_name, { rarity, selectedRarity });
           return false;
         }
       }
 
       // Mana Cost (CMC) Filter
-      const cmc = card.cmc ?? meta.cmc;
-      if (minCmc !== '' && (cmc === undefined || cmc === null || cmc < parseFloat(minCmc))) {
+      if (minCmc !== '' && (cmc === undefined || cmc === null || Number(cmc) < parseFloat(minCmc))) {
+        if (index < 5) console.log(`[Card #${index} Rejected - Min CMC Mismatch]:`, card.card_name, { cmc, minCmc });
         return false;
       }
-      if (maxCmc !== '' && (cmc === undefined || cmc === null || cmc > parseFloat(maxCmc))) {
+      if (maxCmc !== '' && (cmc === undefined || cmc === null || Number(cmc) > parseFloat(maxCmc))) {
+        if (index < 5) console.log(`[Card #${index} Rejected - Max CMC Mismatch]:`, card.card_name, { cmc, maxCmc });
         return false;
       }
 
-      // Color / Color Identity Filter
+      // Color Filter
       if (selectedColors.length > 0) {
-        const cardColors =
-          card.colors ||
-          meta.colors ||
-          card.color_identity ||
-          meta.color_identity ||
-          [];
-
         if (selectedColors.includes('C')) {
-          if (cardColors.length > 0) return false;
+          if (cardColors.length > 0) {
+            if (index < 5) console.log(`[Card #${index} Rejected - Not Colorless]:`, card.card_name, { cardColors });
+            return false;
+          }
         } else {
           const hasAllSelected = selectedColors.every((c) => cardColors.includes(c));
-          if (!hasAllSelected) return false;
+          if (!hasAllSelected) {
+            if (index < 5) console.log(`[Card #${index} Rejected - Color Mismatch]:`, card.card_name, { cardColors, selectedColors });
+            return false;
+          }
         }
+      }
+
+      if (index < 5 && isFilterActive) {
+        console.log(`[Card #${index} PASSED]:`, card.card_name || meta.name, { scryfallId, metaResolved: Boolean(meta.id), typeLine, rarity, cmc, cardColors });
       }
 
       return true;
     });
+
+    if (isFilterActive) {
+      console.log('Filtered Results Count:', result.length);
+      console.groupEnd();
+    }
+
+    return result;
   }, [
     libraryList,
     libraryMap,
@@ -305,7 +372,7 @@ export default function LibraryTab({
 
         const csvString = csvRows.join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.URL.createObjectURL(blob);
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
         link.setAttribute('download', 'mtg_library.csv');
