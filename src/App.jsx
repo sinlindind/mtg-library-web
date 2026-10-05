@@ -4,9 +4,11 @@ import Login from './components/Login.jsx';
 import SearchTab from './components/SearchTab.jsx';
 import LibraryTab from './components/LibraryTab.jsx';
 import WishlistTab from './components/WishlistTab.jsx';
+import DecksTab from './components/DecksTab.jsx';
 import ExportModal, { AVAILABLE_FIELDS } from './components/ExportModal.jsx';
 import { useLibrary } from './hooks/useLibrary.js';
 import { useWishlist } from './hooks/useWishlist.js';
+import { useDecks } from './hooks/useDecks.js';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -37,6 +39,20 @@ export default function App() {
     handleToggleWishlist,
     handleUpdateWishlistQty,
   } = useWishlist(session);
+
+  const {
+    decks,
+    activeDeck,
+    setActiveDeck,
+    activeDeckCards,
+    loading: decksLoading,
+    fetchDecks,
+    fetchDeckCards,
+    handleCreateDeck,
+    handleDeleteDeck,
+    handleUpdateDeckCard,
+    handleExportMissingToWishlist,
+  } = useDecks(session);
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -76,8 +92,9 @@ export default function App() {
     if (session?.user?.id) {
       fetchLibrary(session.user.id);
       fetchWishlist(session.user.id);
+      fetchDecks();
     }
-  }, [session?.user?.id, fetchLibrary, fetchWishlist]);
+  }, [session?.user?.id, fetchLibrary, fetchWishlist, fetchDecks]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -88,7 +105,7 @@ export default function App() {
     setSearchResults([]);
   };
 
-  if (!session) return <Login />;
+  if (!session) return <Login/>;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
@@ -141,67 +158,36 @@ export default function App() {
           >
             ✨ Wishlist ({wishlistList.length})
           </button>
+          <button
+            onClick={() => setActiveTab('decks')}
+            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
+              activeTab === 'decks'
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            🃏 Decks ({decks.length})
+          </button>
         </div>
 
         {activeTab === 'search' && (
-          <SearchTab
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            availableTags={availableTags}
-            handleUpdateQuantity={handleUpdateQuantity}
-            handleToggleWishlist={handleToggleWishlist}
-            handleAddTag={handleAddTag}
-            handleRemoveTag={handleRemoveTag}
-            handleToggleTagCheck={handleToggleTagCheck}
-            setPreviewImage={setPreviewImage}
-            searchResults={searchResults}
-            setSearchResults={setSearchResults}
-          />
+          <SearchTab availableTags="{availableTags}" handleAddTag="{handleAddTag}" handleRemoveTag="{handleRemoveTag}" handleToggleTagCheck="{handleToggleTagCheck}" handleToggleWishlist="{handleToggleWishlist}" handleUpdateQuantity="{handleUpdateQuantity}" libraryMap="{libraryMap}" searchResults="{searchResults}" setPreviewImage="{setPreviewImage}" setSearchResults="{setSearchResults}" wishlistMap="{wishlistMap}"/>
         )}
 
         {activeTab === 'library' && (
-          <LibraryTab
-            libraryList={libraryList}
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            availableTags={availableTags}
-            handleUpdateQuantity={handleUpdateQuantity}
-            handleToggleWishlist={handleToggleWishlist}
-            handleAddTag={handleAddTag}
-            handleRemoveTag={handleRemoveTag}
-            handleToggleTagCheck={handleToggleTagCheck}
-            setPreviewImage={setPreviewImage}
-            setShowExportModal={setShowExportModal}
-            selectedFields={selectedFields}
-            exportFormat={exportFormat}
-            setExporting={setExporting}
-            setExportProgress={setExportProgress}
-          />
+          <LibraryTab availableTags="{availableTags}" exportFormat="{exportFormat}" handleAddTag="{handleAddTag}" handleRemoveTag="{handleRemoveTag}" handleToggleTagCheck="{handleToggleTagCheck}" handleToggleWishlist="{handleToggleWishlist}" handleUpdateQuantity="{handleUpdateQuantity}" libraryList="{libraryList}" libraryMap="{libraryMap}" selectedFields="{selectedFields}" setExportProgress="{setExportProgress}" setExporting="{setExporting}" setPreviewImage="{setPreviewImage}" setShowExportModal="{setShowExportModal}" wishlistMap="{wishlistMap}"/>
         )}
 
         {activeTab === 'wishlist' && (
-          <WishlistTab
-            wishlistList={wishlistList}
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            handleToggleWishlist={handleToggleWishlist}
-            handleUpdateWishlistQty={handleUpdateWishlistQty}
-            setPreviewImage={setPreviewImage}
-          />
+          <WishlistTab handleToggleWishlist="{handleToggleWishlist}" handleUpdateWishlistQty="{handleUpdateWishlistQty}" libraryMap="{libraryMap}" setPreviewImage="{setPreviewImage}" wishlistList="{wishlistList}" wishlistMap="{wishlistMap}"/>
+        )}
+
+        {activeTab === 'decks' && (
+          <DecksTab activeDeck="{activeDeck}" activeDeckCards="{activeDeckCards}" decks="{decks}" fetchDeckCards="{fetchDeckCards}" fetchDecks="{fetchDecks}" fetchWishlist="{fetchWishlist}" handleCreateDeck="{handleCreateDeck}" handleDeleteDeck="{handleDeleteDeck}" handleExportMissingToWishlist="{handleExportMissingToWishlist}" handleUpdateDeckCard="{handleUpdateDeckCard}" libraryMap="{libraryMap}" loading="{decksLoading}" setActiveDeck="{setActiveDeck}" setPreviewImage="{setPreviewImage}" wishlistMap="{wishlistMap}"/>
         )}
       </div>
 
-      <ExportModal
-        showExportModal={showExportModal}
-        setShowExportModal={setShowExportModal}
-        exportFormat={exportFormat}
-        setExportFormat={setExportFormat}
-        selectedFields={selectedFields}
-        setSelectedFields={setSelectedFields}
-        exporting={exporting}
-        exportProgress={exportProgress}
-        handleExecuteExport={LibraryTab.handleExecuteExport}
-      />
+      <ExportModal exportFormat="{exportFormat}" exportProgress="{exportProgress}" exporting="{exporting}" handleExecuteExport="{LibraryTab.handleExecuteExport}" selectedFields="{selectedFields}" setExportFormat="{setExportFormat}" setSelectedFields="{setSelectedFields}" setShowExportModal="{setShowExportModal}" showExportModal="{showExportModal}"/>
 
       {previewImage && (
         <div
