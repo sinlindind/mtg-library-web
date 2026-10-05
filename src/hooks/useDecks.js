@@ -48,7 +48,11 @@ export function useDecks(session) {
 
   // Create a new deck
   const handleCreateDeck = async (name, format = 'commander') => {
-    if (!session?.user?.id || !name.trim()) return;
+    if (!session?.user?.id || !name.trim()) {
+      console.error('Cannot create deck: No active session user ID.');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('user_decks')
@@ -57,11 +61,7 @@ export function useDecks(session) {
         .single();
 
       if (error) throw error;
-      if (data) {
-        setDecks((prev) => [data, ...(Array.isArray(prev) ? prev : [])]);
-        setActiveDeck(data);
-        setActiveDeckCards([]);
-      }
+      // Update local state...
     } catch (err) {
       console.error('Error creating deck:', err.message);
     }
