@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import CardItem from './CardItem';
-import { fetchScryfallSearch } from '../services/scryfall';
 
 export default function DecksTab({
   decks = [],
@@ -21,13 +20,9 @@ export default function DecksTab({
 }) {
   const [newDeckName, setNewDeckName] = useState('');
   const [deckFormat, setDeckFormat] = useState('commander');
-  const [cardSearchQuery, setCardSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
 
   const safeDecks = Array.isArray(decks) ? decks : [];
   const safeDeckCards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
-  const safeSearchResults = Array.isArray(searchResults) ? searchResults : [];
 
   useEffect(() => {
     fetchDecks();
@@ -39,22 +34,6 @@ export default function DecksTab({
     }
   }, [activeDeck?.id, fetchDeckCards]);
 
-  const handleSearchCards = async (e) => {
-    e.preventDefault();
-    if (!cardSearchQuery.trim()) return;
-    setSearching(true);
-    try {
-      const results = await fetchScryfallSearch(cardSearchQuery);
-      setSearchResults(Array.isArray(results) ? results : []);
-    } catch (err) {
-      console.error(err);
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // Deck Statistics Calculations
   const totalDeckCards = safeDeckCards.reduce((acc, c) => acc + (c.quantity || 0), 0);
 
   const getOwnershipStatus = (scryfallId, requiredQty) => {
@@ -67,7 +46,6 @@ export default function DecksTab({
 
   return (
     <div className="space-y-6">
-      {/* Top Controls: Selector & Create Deck */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
         <div className="flex items-center gap-3 w-full md:w-auto">
           <label className="font-semibold text-sm shrink-0">Active Deck:</label>
@@ -123,7 +101,6 @@ export default function DecksTab({
 
       {activeDeck ? (
         <div className="space-y-6">
-          {/* Deck Header & Actions */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
             <div>
               <h2 className="text-2xl font-bold">{activeDeck.name}</h2>
@@ -148,62 +125,10 @@ export default function DecksTab({
             </div>
           </div>
 
-          {/* Add Cards Search Section */}
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
-            <h3 className="font-bold text-lg">Add Cards to Deck</h3>
-            <form onSubmit={handleSearchCards} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Search card to add..."
-                value={cardSearchQuery}
-                onChange={(e) => setCardSearchQuery(e.target.value)}
-                className="flex-1 p-2 text-sm border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-              />
-              <button
-                type="submit"
-                disabled={searching}
-                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg font-semibold cursor-pointer"
-              >
-                {searching ? 'Searching...' : 'Search'}
-              </button>
-            </form>
-
-            {safeSearchResults.length > 0 && (
-              <div className="max-h-80 overflow-y-auto space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                {safeSearchResults.map((card) => {
-                  const scryfallId = String(card.id).toLowerCase();
-                  const inDeck = safeDeckCards.find((c) => c.scryfall_id === scryfallId);
-
-                  return (
-                    <div
-                      key={card.id}
-                      className="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm"
-                    >
-                      <div>
-                        <span className="font-bold">{card.name}</span>
-                        <span className="text-xs text-slate-500 ml-2">({card.set_name})</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {inDeck && <span className="text-xs text-blue-500 font-semibold">{inDeck.quantity}x in deck</span>}
-                        <button
-                          onClick={() => handleUpdateDeckCard(card, 1)}
-                          className="px-2 py-1 bg-emerald-600 text-white text-xs rounded font-bold cursor-pointer"
-                        >
-                          + Add
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Deck Cards List with Ownership Indicators */}
           <div className="space-y-4">
             <h3 className="font-bold text-lg">Deck List ({safeDeckCards.length} Cards)</h3>
             {safeDeckCards.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">No cards in this deck yet. Use the search above to add cards!</div>
+              <div className="text-center py-8 text-slate-500">No cards in this deck yet. Use Search or My Library to add cards to this deck!</div>
             ) : (
               safeDeckCards.map((card) => {
                 const ownership = getOwnershipStatus(card.scryfall_id, card.quantity);
@@ -218,7 +143,6 @@ export default function DecksTab({
                       type="library"
                     />
                     
-                    {/* Deck Controls Overlay */}
                     <div className="mt-2 flex flex-wrap justify-between items-center bg-slate-100 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                       <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                         {ownership.text}
@@ -227,14 +151,14 @@ export default function DecksTab({
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500">In Deck:</span>
                         <button
-                          onClick={() => handleUpdateDeckCard(card, -1)}
+                          onClick={() => handleUpdateDeckCard(card, -1, activeDeck.id)}
                           className="w-7 h-7 bg-white dark:bg-slate-700 rounded font-bold text-sm border border-slate-300 dark:border-slate-600 cursor-pointer"
                         >
                           -
                         </button>
                         <span className="w-5 text-center font-bold text-sm">{card.quantity}</span>
                         <button
-                          onClick={() => handleUpdateDeckCard(card, 1)}
+                          onClick={() => handleUpdateDeckCard(card, 1, activeDeck.id)}
                           className="w-7 h-7 bg-blue-600 text-white rounded font-bold text-sm cursor-pointer"
                         >
                           +

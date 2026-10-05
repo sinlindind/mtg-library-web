@@ -19,6 +19,9 @@ export default function LibraryTab({
   exportFormat,
   setExporting,
   setExportProgress,
+  decks,
+  activeDeck,
+  handleUpdateDeckCard,
 }) {
   const [librarySearch, setLibrarySearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
@@ -29,7 +32,6 @@ export default function LibraryTab({
   const [tagInputs, setTagInputs] = useState({});
   const [activeTagDropdown, setActiveTagDropdown] = useState(null);
 
-  // Reset tag filter back to 'ALL' if the active tag filter no longer exists in availableTags
   useEffect(() => {
     if (
       selectedTagFilter !== 'ALL' &&
@@ -86,164 +88,6 @@ export default function LibraryTab({
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-
-  const handleExecuteExport = async () => {
-    const cardsToExport = sortedLibrary;
-
-    if (cardsToExport.length === 0) {
-      alert('No library cards available to export!');
-      return;
-    }
-
-    setExporting(true);
-    setExportProgress(0);
-
-    try {
-      const scryfallMap = await fetchScryfallDetailsChunked(cardsToExport, setExportProgress);
-
-      const exportedData = cardsToExport.map((item) => {
-        const scryfallObj = scryfallMap[String(item.scryfall_id).toLowerCase()] || {};
-        const record = {};
-
-        selectedFields.forEach((fieldKey) => {
-          switch (fieldKey) {
-            case 'card_name':
-              record['Title'] = item.card_name || scryfallObj.name || '';
-              break;
-            case 'set_name':
-              record['Edition'] = item.set_name || scryfallObj.set_name || '';
-              break;
-            case 'reg_quantity':
-              record['Regular Qty'] = item.reg_quantity || 0;
-              break;
-            case 'foil_quantity':
-              record['Foil Qty'] = item.foil_quantity || 0;
-              break;
-            case 'scryfall_id':
-              record['Scryfall ID'] = item.scryfall_id || scryfallObj.id || '';
-              break;
-            case 'mana_cost':
-              record['Mana Cost'] = scryfallObj.mana_cost || '';
-              break;
-            case 'type_line':
-              record['Type Line'] = scryfallObj.type_line || '';
-              break;
-            case 'oracle_text':
-              record['Oracle Text'] = scryfallObj.oracle_text || '';
-              break;
-            case 'rarity':
-              record['Rarity'] = scryfallObj.rarity || '';
-              break;
-            case 'cmc':
-              record['CMC'] = scryfallObj.cmc ?? '';
-              break;
-            case 'colors':
-              record['Colors'] = (scryfallObj.colors || []).join(', ');
-              break;
-            case 'price_usd':
-              record['Price USD'] = scryfallObj.prices?.usd || '';
-              break;
-            case 'price_usd_foil':
-              record['Price Foil USD'] = scryfallObj.prices?.usd_foil || '';
-              break;
-            case 'tags':
-              record['Tags'] = (item.tags || []).join(', ');
-              break;
-            default:
-              break;
-          }
-        });
-
-        return record;
-      });
-
-      if (exportFormat === 'json') {
-        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportedData, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute('href', dataStr);
-        downloadAnchor.setAttribute('download', 'mtg_library.json');
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-      } else if (exportFormat === 'csv') {
-        const headers = Object.keys(exportedData[0] || {});
-        const csvRows = [];
-        csvRows.push(headers.join(','));
-
-        for (const row of exportedData) {
-          const values = headers.map((header) => {
-            const val = row[header] ?? '';
-            const escaped = ('' + val).replace(/"/g, '""');
-            return `"${escaped}"`;
-          });
-          csvRows.push(values.join(','));
-        }
-
-        const csvString = csvRows.join('\n');
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'mtg_library.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else if (exportFormat === 'pdf') {
-        const headers = Object.keys(exportedData[0] || {});
-        const printWindow = window.open('', '_blank');
-
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>MTG Collection Export</title>
-              <style>
-                body { font-family: sans-serif; padding: 20px; color: #333; }
-                h1 { font-size: 20px; margin-bottom: 10px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-                tr:nth-child(even) { background-color: #fafafa; }
-              </style>
-            </head>
-            <body>
-              <h1>MTG Personal Library</h1>
-              <table>
-                <thead>
-                  <tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>
-                </thead>
-                <tbody>
-                  ${exportedData
-                    .map(
-                      (row) =>
-                        `<tr>${headers.map((h) => `<td>${row[h]}</td>`).join('')}</tr>`
-                    )
-                    .join('')}
-                </tbody>
-              </table>
-            </body>
-          </html>
-        `;
-
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
-      }
-
-      setShowExportModal(false);
-    } catch (err) {
-      console.error('Export Error:', err);
-      alert('An error occurred while generating the export.');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Expose function for App execution
-  LibraryTab.handleExecuteExport = handleExecuteExport;
 
   const renderPaginationControls = () => (
     <div className="flex flex-wrap justify-between items-center gap-4 my-6">
@@ -365,6 +209,9 @@ export default function LibraryTab({
                 setTagInputVal={(val) =>
                   setTagInputs((prev) => ({ ...prev, [scryfallId]: val }))
                 }
+                decks={decks}
+                activeDeck={activeDeck}
+                handleUpdateDeckCard={handleUpdateDeckCard}
               />
             );
           })

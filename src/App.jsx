@@ -16,7 +16,6 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Custom Hooks
   const {
     libraryMap,
     setLibraryMap,
@@ -54,7 +53,6 @@ export default function App() {
     handleExportMissingToWishlist,
   } = useDecks(session);
 
-  // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedFields, setSelectedFields] = useState(
     AVAILABLE_FIELDS.filter((f) => f.default).map((f) => f.key)
@@ -66,7 +64,6 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error && error.message?.includes('JWT')) {
-        console.warn('JWT Time Sync Warning:', error.message);
         supabase.auth.refreshSession();
       } else {
         setSession(session);
@@ -76,13 +73,7 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        setSession(session);
-      } else if (event === 'SIGNED_OUT') {
-        setSession(null);
-      } else {
-        setSession(session);
-      }
+      setSession(session);
     });
 
     return () => subscription.unsubscribe();
@@ -183,6 +174,9 @@ export default function App() {
             handleRemoveTag={handleRemoveTag}
             handleToggleTagCheck={handleToggleTagCheck}
             setPreviewImage={setPreviewImage}
+            decks={decks}
+            activeDeck={activeDeck}
+            handleUpdateDeckCard={handleUpdateDeckCard}
           />
         )}
 
@@ -203,6 +197,9 @@ export default function App() {
             selectedFields={selectedFields}
             setExporting={setExporting}
             setExportProgress={setExportProgress}
+            decks={decks}
+            activeDeck={activeDeck}
+            handleUpdateDeckCard={handleUpdateDeckCard}
           />
         )}
 

@@ -14,6 +14,9 @@ export default function SearchTab({
   setPreviewImage,
   searchResults,
   setSearchResults,
+  decks,
+  activeDeck,
+  handleUpdateDeckCard,
 }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -22,7 +25,6 @@ export default function SearchTab({
   const [loading, setLoading] = useState(false);
   const [searchSort, setSearchSort] = useState('name');
 
-  // Tag state management for Search tab cards
   const [activeTagDropdown, setActiveTagDropdown] = useState(null);
   const [tagInputVal, setTagInputVal] = useState('');
 
@@ -58,7 +60,6 @@ export default function SearchTab({
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Close tag dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -225,6 +226,9 @@ export default function SearchTab({
               }}
               handleRemoveTag={handleRemoveTag}
               handleToggleTagCheck={handleToggleTagCheck}
+              decks={decks}
+              activeDeck={activeDeck}
+              handleUpdateDeckCard={handleUpdateDeckCard}
             />
           );
         })}

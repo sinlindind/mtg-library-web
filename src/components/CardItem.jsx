@@ -9,6 +9,10 @@ export default function CardItem({
   handleToggleWishlist,
   handleUpdateQuantity,
   handleUpdateWishlistQty,
+  // Deck Integration Props
+  decks = [],
+  activeDeck = null,
+  handleUpdateDeckCard,
   // Tag Props
   currentTags = [],
   availableTags = [],
@@ -24,13 +28,13 @@ export default function CardItem({
   const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
   const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
   const cardName = card.name || card.card_name;
-  
+
   const owned = libraryMap[scryfallId] || { reg: card.reg_quantity || 0, foil: card.foil_quantity || 0 };
   const totalOwned = owned.reg + owned.foil;
   const isWishlisted = !!wishlistMap[scryfallId];
 
   return (
-    <div className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start">
+    <div className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start w-full">
       {imgUrl ? (
         <img
           src={imgUrl}
@@ -58,6 +62,39 @@ export default function CardItem({
         </div>
         <p className="text-base text-slate-500">{card.set_name}</p>
 
+        {/* Add to Deck Quick Action */}
+        {handleUpdateDeckCard && decks.length > 0 && (
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs font-semibold text-slate-500">Add to Deck:</span>
+            {activeDeck ? (
+              <button
+                onClick={() => handleUpdateDeckCard(card, 1, activeDeck.id)}
+                className="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium cursor-pointer transition-colors"
+              >
+                + {activeDeck.name}
+              </button>
+            ) : (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleUpdateDeckCard(card, 1, e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                className="p-1 text-xs border rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                <option value="" disabled>Select deck...</option>
+                {decks.map((deck) => (
+                  <option key={deck.id} value={deck.id}>
+                    {deck.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         {/* Search Context Details */}
         {type === 'search' && totalOwned > 0 && (
           <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
@@ -65,7 +102,7 @@ export default function CardItem({
           </span>
         )}
 
-        {/* Tag Section - Displays in library mode or whenever totalOwned > 0 */}
+        {/* Tag Section */}
         {(type === 'library' || totalOwned > 0) && (
           <div className="flex flex-wrap gap-2 items-center pt-2">
             {currentTags.map((tag) => (
