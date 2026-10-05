@@ -19,9 +19,10 @@ export function useDecks(session) {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setDecks(data || []);
+      setDecks(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching decks:', err.message);
+      setDecks([]);
     } finally {
       setLoading(false);
     }
@@ -38,9 +39,10 @@ export function useDecks(session) {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setActiveDeckCards(data || []);
+      setActiveDeckCards(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching deck cards:', err.message);
+      setActiveDeckCards([]);
     }
   }, []);
 
@@ -55,9 +57,11 @@ export function useDecks(session) {
         .single();
 
       if (error) throw error;
-      setDecks((prev) => [data, ...prev]);
-      setActiveDeck(data);
-      setActiveDeckCards([]);
+      if (data) {
+        setDecks((prev) => [data, ...(Array.isArray(prev) ? prev : [])]);
+        setActiveDeck(data);
+        setActiveDeckCards([]);
+      }
     } catch (err) {
       console.error('Error creating deck:', err.message);
     }
@@ -69,7 +73,7 @@ export function useDecks(session) {
       const { error } = await supabase.from('user_decks').delete().eq('id', deckId);
       if (error) throw error;
 
-      setDecks((prev) => prev.filter((d) => d.id !== deckId));
+      setDecks((prev) => (Array.isArray(prev) ? prev.filter((d) => d.id !== deckId) : []));
       if (activeDeck?.id === deckId) {
         setActiveDeck(null);
         setActiveDeckCards([]);
@@ -84,23 +88,25 @@ export function useDecks(session) {
     if (!activeDeck) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const existingIndex = activeDeckCards.findIndex(
+    const currentCards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
+    const existingIndex = currentCards.findIndex(
       (c) => c.scryfall_id === scryfallId && c.board === board
     );
 
-    const existingCard = activeDeckCards[existingIndex];
+    const existingCard = currentCards[existingIndex];
     const newQty = (existingCard?.quantity || 0) + delta;
 
     if (newQty <= 0) {
       if (existingCard) {
-        // Remove from database
         const { error } = await supabase
           .from('deck_cards')
           .delete()
           .eq('id', existingCard.id);
 
         if (!error) {
-          setActiveDeckCards((prev) => prev.filter((c) => c.id !== existingCard.id));
+          setActiveDeckCards((prev) =>
+            Array.isArray(prev) ? prev.filter((c) => c.id !== existingCard.id) : []
+          );
         }
       }
       return;
@@ -111,7 +117,10 @@ export function useDecks(session) {
       scryfall_id: scryfallId,
       card_name: card.name || card.card_name,
       set_name: card.set_name || '',
-      image_url: card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url,
+      image_url:
+        card.image_uris?.normal ||
+        card.card_faces?.[0]?.image_uris?.normal ||
+        card.image_url,
       quantity: newQty,
       board: board,
     };
@@ -126,7 +135,9 @@ export function useDecks(session) {
 
       if (!error && data) {
         setActiveDeckCards((prev) =>
-          prev.map((c) => (c.id === data.id ? data : c))
+          Array.isArray(prev)
+            ? prev.map((c) => (c.id === data.id ? data : c))
+            : [data]
         );
       }
     } else {
@@ -137,20 +148,21 @@ export function useDecks(session) {
         .single();
 
       if (!error && data) {
-        setActiveDeckCards((prev) => [...prev, data]);
+        setActiveDeckCards((prev) => [...(Array.isArray(prev) ? prev : []), data]);
       }
     }
   };
 
   // One-click: Send missing deck cards directly to Wishlist
   const handleExportMissingToWishlist = async (libraryMap, fetchWishlist) => {
-    if (!activeDeckCards.length || !session?.user?.id) return;
+    const cards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
+    if (!cards.length || !session?.user?.id) return;
 
     const missingItems = [];
 
-    activeDeckCards.forEach((dc) => {
-      const libraryEntry = libraryMap[dc.scryfall_id] || { reg: 0, foil: 0 };
-      const totalOwned = libraryEntry.reg + libraryEntry.foil;
+    cards.forEach((dc) => {
+      const libraryEntry = (libraryMap && libraryMap[dc.scryfall_id]) || { reg: 0, foil: 0 };
+      const totalOwned = (libraryEntry.reg || 0) + (libraryEntry.foil || 0);
 
       if (totalOwned < dc.quantity) {
         const missingCount = dc.quantity - totalOwned;
@@ -184,10 +196,10 @@ export function useDecks(session) {
   };
 
   return {
-    decks,
+    decks: Array.isArray(decks) ? decks : [],
     activeDeck,
     setActiveDeck,
-    activeDeckCards,
+    activeDeckCards: Array.isArray(activeDeckCards) ? activeDeckCards : [],
     loading,
     fetchDecks,
     fetchDeckCards,

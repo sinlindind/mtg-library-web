@@ -3,10 +3,10 @@ import CardItem from './CardItem';
 import { fetchScryfallSearch } from '../services/scryfall';
 
 export default function DecksTab({
-  decks,
+  decks = [],
   activeDeck,
   setActiveDeck,
-  activeDeckCards,
+  activeDeckCards = [],
   loading,
   fetchDecks,
   fetchDeckCards,
@@ -14,8 +14,8 @@ export default function DecksTab({
   handleDeleteDeck,
   handleUpdateDeckCard,
   handleExportMissingToWishlist,
-  libraryMap,
-  wishlistMap,
+  libraryMap = {},
+  wishlistMap = {},
   fetchWishlist,
   setPreviewImage,
 }) {
@@ -24,6 +24,10 @@ export default function DecksTab({
   const [cardSearchQuery, setCardSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+
+  const safeDecks = Array.isArray(decks) ? decks : [];
+  const safeDeckCards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
+  const safeSearchResults = Array.isArray(searchResults) ? searchResults : [];
 
   useEffect(() => {
     fetchDecks();
@@ -41,20 +45,21 @@ export default function DecksTab({
     setSearching(true);
     try {
       const results = await fetchScryfallSearch(cardSearchQuery);
-      setSearchResults(results);
+      setSearchResults(Array.isArray(results) ? results : []);
     } catch (err) {
       console.error(err);
+      setSearchResults([]);
     } finally {
       setSearching(false);
     }
   };
 
   // Deck Statistics Calculations
-  const totalDeckCards = activeDeckCards.reduce((acc, c) => acc + c.quantity, 0);
+  const totalDeckCards = safeDeckCards.reduce((acc, c) => acc + (c.quantity || 0), 0);
 
   const getOwnershipStatus = (scryfallId, requiredQty) => {
     const owned = libraryMap[scryfallId] || { reg: 0, foil: 0 };
-    const totalOwned = owned.reg + owned.foil;
+    const totalOwned = (owned.reg || 0) + (owned.foil || 0);
     if (totalOwned >= requiredQty) return { status: 'owned', text: `🟢 Own ${totalOwned} / Need ${requiredQty}` };
     if (totalOwned > 0) return { status: 'partial', text: `🟡 Own ${totalOwned} / Need ${requiredQty}` };
     return { status: 'missing', text: `🔴 Own 0 / Need ${requiredQty}` };
@@ -69,15 +74,15 @@ export default function DecksTab({
           <select
             value={activeDeck?.id || ''}
             onChange={(e) => {
-              const selected = decks.find((d) => d.id === e.target.value);
+              const selected = safeDecks.find((d) => d.id === e.target.value);
               setActiveDeck(selected || null);
             }}
             className="p-2 border rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm flex-1 md:w-64"
           >
             <option value="">-- Select a Deck --</option>
-            {decks.map((deck) => (
+            {safeDecks.map((deck) => (
               <option key={deck.id} value={deck.id}>
-                {deck.name} ({deck.format.toUpperCase()})
+                {deck.name} ({deck.format ? deck.format.toUpperCase() : 'COMMANDER'})
               </option>
             ))}
           </select>
@@ -163,11 +168,11 @@ export default function DecksTab({
               </button>
             </form>
 
-            {searchResults.length > 0 && (
+            {safeSearchResults.length > 0 && (
               <div className="max-h-80 overflow-y-auto space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                {searchResults.map((card) => {
+                {safeSearchResults.map((card) => {
                   const scryfallId = String(card.id).toLowerCase();
-                  const inDeck = activeDeckCards.find((c) => c.scryfall_id === scryfallId);
+                  const inDeck = safeDeckCards.find((c) => c.scryfall_id === scryfallId);
 
                   return (
                     <div
@@ -196,16 +201,22 @@ export default function DecksTab({
 
           {/* Deck Cards List with Ownership Indicators */}
           <div className="space-y-4">
-            <h3 className="font-bold text-lg">Deck List ({activeDeckCards.length} Cards)</h3>
-            {activeDeckCards.length === 0 ? (
+            <h3 className="font-bold text-lg">Deck List ({safeDeckCards.length} Cards)</h3>
+            {safeDeckCards.length === 0 ? (
               <div className="text-center py-8 text-slate-500">No cards in this deck yet. Use the search above to add cards!</div>
             ) : (
-              activeDeckCards.map((card) => {
+              safeDeckCards.map((card) => {
                 const ownership = getOwnershipStatus(card.scryfall_id, card.quantity);
 
                 return (
                   <div key={card.id} className="relative">
-                    <CardItem card="{card}" libraryMap="{libraryMap}" setPreviewImage="{setPreviewImage}" type="library" wishlistMap="{wishlistMap}"/>
+                    <CardItem
+                      card={card}
+                      libraryMap={libraryMap}
+                      wishlistMap={wishlistMap}
+                      setPreviewImage={setPreviewImage}
+                      type="library"
+                    />
                     
                     {/* Deck Controls Overlay */}
                     <div className="mt-2 flex flex-wrap justify-between items-center bg-slate-100 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -217,14 +228,14 @@ export default function DecksTab({
                         <span className="text-xs font-bold text-slate-500">In Deck:</span>
                         <button
                           onClick={() => handleUpdateDeckCard(card, -1)}
-                          className="w-7 h-7 bg-white dark:bg-slate-700 rounded font-bold text-sm border border-slate-300 dark:border-slate-600"
+                          className="w-7 h-7 bg-white dark:bg-slate-700 rounded font-bold text-sm border border-slate-300 dark:border-slate-600 cursor-pointer"
                         >
                           -
                         </button>
                         <span className="w-5 text-center font-bold text-sm">{card.quantity}</span>
                         <button
                           onClick={() => handleUpdateDeckCard(card, 1)}
-                          className="w-7 h-7 bg-blue-600 text-white rounded font-bold text-sm"
+                          className="w-7 h-7 bg-blue-600 text-white rounded font-bold text-sm cursor-pointer"
                         >
                           +
                         </button>
