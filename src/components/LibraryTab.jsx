@@ -184,7 +184,7 @@ export default function LibraryTab({
           </div>
         ) : (
           paginatedLibrary.map((card) => {
-            const scryfallId = String(card.scryfall_id).trim().toLowerCase();
+            const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
             const currentTags = normalizeTags(card.tags);
             const isDropdownOpen = activeTagDropdown === scryfallId;
             const cardDecks = cardDecksMap[scryfallId] || [];

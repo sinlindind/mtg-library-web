@@ -17,6 +17,7 @@ export default function SearchTab({
   decks,
   activeDeck,
   handleUpdateDeckCard,
+  cardDecksMap = {},
 }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -203,6 +204,7 @@ export default function SearchTab({
           const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
           const libraryEntry = libraryMap[scryfallId] || {};
           const currentTags = libraryEntry.tags || [];
+          const cardDecks = cardDecksMap[scryfallId] || [];
 
           return (
             <CardItem
@@ -229,6 +231,7 @@ export default function SearchTab({
               decks={decks}
               activeDeck={activeDeck}
               handleUpdateDeckCard={handleUpdateDeckCard}
+              cardDecks={cardDecks}
             />
           );
         })}

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
-import Login from './components/Login.jsx';
-import SearchTab from './components/SearchTab.jsx';
-import LibraryTab from './components/LibraryTab.jsx';
-import WishlistTab from './components/WishlistTab.jsx';
-import DecksTab from './components/DecksTab.jsx';
-import ExportModal, { AVAILABLE_FIELDS } from './components/ExportModal.jsx';
-import { useLibrary } from './hooks/useLibrary.js';
-import { useWishlist } from './hooks/useWishlist.js';
-import { useDecks } from './hooks/useDecks.js';
+import { useDecks } from './hooks/useDecks';
+import { useLibrary } from './hooks/useLibrary';
+import { useWishlist } from './hooks/useWishlist';
+import LibraryTab from './components/LibraryTab';
+import SearchTab from './components/SearchTab';
+import DecksTab from './components/DecksTab';
+import WishlistTab from './components/WishlistTab';
+import Login from './components/Login';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -17,10 +16,22 @@ export default function App() {
   const [previewImage, setPreviewImage] = useState(null);
 
   const {
+    decks,
+    activeDeck,
+    setActiveDeck,
+    activeDeckCards,
+    cardDecksMap,
+    fetchDecks,
+    fetchDeckCards,
+    handleCreateDeck,
+    handleDeleteDeck,
+    handleUpdateDeckCard,
+    handleExportMissingToWishlist,
+  } = useDecks(session);
+
+  const {
     libraryMap,
-    setLibraryMap,
     libraryList,
-    setLibraryList,
     fetchLibrary,
     availableTags,
     handleUpdateQuantity,
@@ -31,48 +42,20 @@ export default function App() {
 
   const {
     wishlistMap,
-    setWishlistMap,
     wishlistList,
-    setWishlistList,
     fetchWishlist,
     handleToggleWishlist,
     handleUpdateWishlistQty,
   } = useWishlist(session);
 
-  const {
-    decks,
-    activeDeck,
-    setActiveDeck,
-    activeDeckCards,
-    loading: decksLoading,
-    fetchDecks,
-    fetchDeckCards,
-    handleCreateDeck,
-    handleDeleteDeck,
-    handleUpdateDeckCard,
-    handleExportMissingToWishlist,
-  } = useDecks(session);
-
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [selectedFields, setSelectedFields] = useState(
-    AVAILABLE_FIELDS.filter((f) => f.default).map((f) => f.key)
-  );
-  const [exportFormat, setExportFormat] = useState('csv');
-  const [exporting, setExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState(0);
-
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error && error.message?.includes('JWT')) {
-        supabase.auth.refreshSession();
-      } else {
-        setSession(session);
-      }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
@@ -85,98 +68,57 @@ export default function App() {
       fetchWishlist(session.user.id);
       fetchDecks();
     }
-  }, [session?.user?.id, fetchLibrary, fetchWishlist, fetchDecks]);
+  }, [session, fetchLibrary, fetchWishlist, fetchDecks]);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setLibraryMap({});
-    setLibraryList([]);
-    setWishlistMap({});
-    setWishlistList([]);
-    setSearchResults([]);
-  };
-
-  if (!session) return <Login />;
+  if (!session) {
+    return <Login />;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
-      <div className="max-w-6xl mx-auto p-6 font-sans">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-            MTG Personal Library
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-500 dark:text-slate-400">
-              {session.user.email}
-            </span>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-4 sm:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <h1 className="text-2xl font-black">MTG Card Library & Deck Builder</h1>
+          <div className="flex gap-2">
+            {['search', 'library', 'decks', 'wishlist'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize cursor-pointer transition-colors ${
+                  activeTab === tab
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
             <button
-              onClick={handleSignOut}
-              className="px-3 py-1.5 text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg cursor-pointer"
+              onClick={() => supabase.auth.signOut()}
+              className="px-3 py-2 bg-red-600/10 hover:bg-red-600 text-red-600 hover:text-white rounded-lg text-sm font-semibold cursor-pointer transition-colors"
             >
               Sign Out
             </button>
           </div>
         </div>
 
-        <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700 mb-6">
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
-              activeTab === 'search'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            🔍 MTG Search
-          </button>
-          <button
-            onClick={() => setActiveTab('library')}
-            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
-              activeTab === 'library'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            📚 My Library ({Array.isArray(libraryList) ? libraryList.length : 0})
-          </button>
-          <button
-            onClick={() => setActiveTab('wishlist')}
-            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
-              activeTab === 'wishlist'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            ✨ Wishlist ({Array.isArray(wishlistList) ? wishlistList.length : 0})
-          </button>
-          <button
-            onClick={() => setActiveTab('decks')}
-            className={`pb-2 px-1 font-semibold transition-colors cursor-pointer ${
-              activeTab === 'decks'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            🃏 Decks ({Array.isArray(decks) ? decks.length : 0})
-          </button>
-        </div>
-
         {activeTab === 'search' && (
           <SearchTab
-            searchResults={searchResults}
-            setSearchResults={setSearchResults}
             libraryMap={libraryMap}
             wishlistMap={wishlistMap}
+            availableTags={availableTags}
             handleUpdateQuantity={handleUpdateQuantity}
             handleToggleWishlist={handleToggleWishlist}
-            availableTags={availableTags}
             handleAddTag={handleAddTag}
             handleRemoveTag={handleRemoveTag}
             handleToggleTagCheck={handleToggleTagCheck}
             setPreviewImage={setPreviewImage}
+            searchResults={searchResults}
+            setSearchResults={setSearchResults}
             decks={decks}
             activeDeck={activeDeck}
             handleUpdateDeckCard={handleUpdateDeckCard}
+            cardDecksMap={cardDecksMap}
           />
         )}
 
@@ -185,32 +127,17 @@ export default function App() {
             libraryList={libraryList}
             libraryMap={libraryMap}
             wishlistMap={wishlistMap}
+            availableTags={availableTags}
             handleUpdateQuantity={handleUpdateQuantity}
             handleToggleWishlist={handleToggleWishlist}
-            availableTags={availableTags}
             handleAddTag={handleAddTag}
             handleRemoveTag={handleRemoveTag}
             handleToggleTagCheck={handleToggleTagCheck}
             setPreviewImage={setPreviewImage}
-            setShowExportModal={setShowExportModal}
-            exportFormat={exportFormat}
-            selectedFields={selectedFields}
-            setExporting={setExporting}
-            setExportProgress={setExportProgress}
             decks={decks}
             activeDeck={activeDeck}
             handleUpdateDeckCard={handleUpdateDeckCard}
-          />
-        )}
-
-        {activeTab === 'wishlist' && (
-          <WishlistTab
-            wishlistList={wishlistList}
-            wishlistMap={wishlistMap}
-            libraryMap={libraryMap}
-            handleToggleWishlist={handleToggleWishlist}
-            handleUpdateWishlistQty={handleUpdateWishlistQty}
-            setPreviewImage={setPreviewImage}
+            cardDecksMap={cardDecksMap}
           />
         )}
 
@@ -220,7 +147,6 @@ export default function App() {
             activeDeck={activeDeck}
             setActiveDeck={setActiveDeck}
             activeDeckCards={activeDeckCards}
-            loading={decksLoading}
             fetchDecks={fetchDecks}
             fetchDeckCards={fetchDeckCards}
             handleCreateDeck={handleCreateDeck}
@@ -233,39 +159,18 @@ export default function App() {
             setPreviewImage={setPreviewImage}
           />
         )}
+
+        {activeTab === 'wishlist' && (
+          <WishlistTab
+            wishlistList={wishlistList}
+            libraryMap={libraryMap}
+            wishlistMap={wishlistMap}
+            handleToggleWishlist={handleToggleWishlist}
+            handleUpdateWishlistQty={handleUpdateWishlistQty}
+            setPreviewImage={setPreviewImage}
+          />
+        )}
       </div>
-
-      <ExportModal
-        showExportModal={showExportModal}
-        setShowExportModal={setShowExportModal}
-        selectedFields={selectedFields}
-        setSelectedFields={setSelectedFields}
-        exportFormat={exportFormat}
-        setExportFormat={setExportFormat}
-        exporting={exporting}
-        exportProgress={exportProgress}
-      />
-
-      {previewImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-pointer"
-          onClick={() => setPreviewImage(null)}
-        >
-          <div className="relative max-w-lg w-full">
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-10 right-0 text-white text-3xl font-bold hover:text-red-400 cursor-pointer"
-            >
-              ✕
-            </button>
-            <img
-              src={previewImage}
-              alt="Full Preview"
-              className="w-full h-auto rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
