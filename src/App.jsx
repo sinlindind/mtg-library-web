@@ -75,101 +75,134 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-          <h1 className="text-2xl font-black">MTG Card Library & Deck Builder</h1>
-          <div className="flex gap-2">
-            {['search', 'library', 'decks', 'wishlist'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold capitalize cursor-pointer transition-colors ${
-                  activeTab === tab
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-            <button
-              onClick={() => supabase.auth.signOut()}
-              className="px-3 py-2 bg-red-600/10 hover:bg-red-600 text-red-600 hover:text-white rounded-lg text-sm font-semibold cursor-pointer transition-colors"
-            >
-              Sign Out
-            </button>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header Title matching production screenshot */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold tracking-tight">MTG Personal Library</h1>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
         </div>
 
-        {activeTab === 'search' && (
-          <SearchTab
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            availableTags={availableTags}
-            handleUpdateQuantity={handleUpdateQuantity}
-            handleToggleWishlist={handleToggleWishlist}
-            handleAddTag={handleAddTag}
-            handleRemoveTag={handleRemoveTag}
-            handleToggleTagCheck={handleToggleTagCheck}
-            setPreviewImage={setPreviewImage}
-            searchResults={searchResults}
-            setSearchResults={setSearchResults}
-            decks={decks}
-            activeDeck={activeDeck}
-            handleUpdateDeckCard={handleUpdateDeckCard}
-            cardDecksMap={cardDecksMap}
-          />
-        )}
+        {/* Navigation Tabs matching production styling */}
+        <div className="flex items-center gap-6 border-b border-slate-800 pb-3 text-sm font-medium">
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`flex items-center gap-2 pb-2 -mb-3 transition-colors cursor-pointer ${
+              activeTab === 'search'
+                ? 'text-blue-400 border-b-2 border-blue-500 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🔍 MTG Search
+          </button>
+          <button
+            onClick={() => setActiveTab('library')}
+            className={`flex items-center gap-2 pb-2 -mb-3 transition-colors cursor-pointer ${
+              activeTab === 'library'
+                ? 'text-blue-400 border-b-2 border-blue-500 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            📚 My Library ({libraryList.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('decks')}
+            className={`flex items-center gap-2 pb-2 -mb-3 transition-colors cursor-pointer ${
+              activeTab === 'decks'
+                ? 'text-blue-400 border-b-2 border-blue-500 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🛡️ Decks ({decks.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('wishlist')}
+            className={`flex items-center gap-2 pb-2 -mb-3 transition-colors cursor-pointer ${
+              activeTab === 'wishlist'
+                ? 'text-blue-400 border-b-2 border-blue-500 font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            ✨ Wishlist ({wishlistList.length})
+          </button>
+        </div>
 
-        {activeTab === 'library' && (
-          <LibraryTab
-            libraryList={libraryList}
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            availableTags={availableTags}
-            handleUpdateQuantity={handleUpdateQuantity}
-            handleToggleWishlist={handleToggleWishlist}
-            handleAddTag={handleAddTag}
-            handleRemoveTag={handleRemoveTag}
-            handleToggleTagCheck={handleToggleTagCheck}
-            setPreviewImage={setPreviewImage}
-            decks={decks}
-            activeDeck={activeDeck}
-            handleUpdateDeckCard={handleUpdateDeckCard}
-            cardDecksMap={cardDecksMap}
-          />
-        )}
+        {/* Active Tab Content Area */}
+        <div className="pt-2">
+          {activeTab === 'search' && (
+            <SearchTab
+              libraryMap={libraryMap}
+              wishlistMap={wishlistMap}
+              availableTags={availableTags}
+              handleUpdateQuantity={handleUpdateQuantity}
+              handleToggleWishlist={handleToggleWishlist}
+              handleAddTag={handleAddTag}
+              handleRemoveTag={handleRemoveTag}
+              handleToggleTagCheck={handleToggleTagCheck}
+              setPreviewImage={setPreviewImage}
+              searchResults={searchResults}
+              setSearchResults={setSearchResults}
+              decks={decks}
+              activeDeck={activeDeck}
+              handleUpdateDeckCard={handleUpdateDeckCard}
+              cardDecksMap={cardDecksMap}
+            />
+          )}
 
-        {activeTab === 'decks' && (
-          <DecksTab
-            decks={decks}
-            activeDeck={activeDeck}
-            setActiveDeck={setActiveDeck}
-            activeDeckCards={activeDeckCards}
-            fetchDecks={fetchDecks}
-            fetchDeckCards={fetchDeckCards}
-            handleCreateDeck={handleCreateDeck}
-            handleDeleteDeck={handleDeleteDeck}
-            handleUpdateDeckCard={handleUpdateDeckCard}
-            handleExportMissingToWishlist={handleExportMissingToWishlist}
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            fetchWishlist={fetchWishlist}
-            setPreviewImage={setPreviewImage}
-          />
-        )}
+          {activeTab === 'library' && (
+            <LibraryTab
+              libraryList={libraryList}
+              libraryMap={libraryMap}
+              wishlistMap={wishlistMap}
+              availableTags={availableTags}
+              handleUpdateQuantity={handleUpdateQuantity}
+              handleToggleWishlist={handleToggleWishlist}
+              handleAddTag={handleAddTag}
+              handleRemoveTag={handleRemoveTag}
+              handleToggleTagCheck={handleToggleTagCheck}
+              setPreviewImage={setPreviewImage}
+              decks={decks}
+              activeDeck={activeDeck}
+              handleUpdateDeckCard={handleUpdateDeckCard}
+              cardDecksMap={cardDecksMap}
+            />
+          )}
 
-        {activeTab === 'wishlist' && (
-          <WishlistTab
-            wishlistList={wishlistList}
-            libraryMap={libraryMap}
-            wishlistMap={wishlistMap}
-            handleToggleWishlist={handleToggleWishlist}
-            handleUpdateWishlistQty={handleUpdateWishlistQty}
-            setPreviewImage={setPreviewImage}
-          />
-        )}
+          {activeTab === 'decks' && (
+            <DecksTab
+              decks={decks}
+              activeDeck={activeDeck}
+              setActiveDeck={setActiveDeck}
+              activeDeckCards={activeDeckCards}
+              fetchDecks={fetchDecks}
+              fetchDeckCards={fetchDeckCards}
+              handleCreateDeck={handleCreateDeck}
+              handleDeleteDeck={handleDeleteDeck}
+              handleUpdateDeckCard={handleUpdateDeckCard}
+              handleExportMissingToWishlist={handleExportMissingToWishlist}
+              libraryMap={libraryMap}
+              wishlistMap={wishlistMap}
+              fetchWishlist={fetchWishlist}
+              setPreviewImage={setPreviewImage}
+            />
+          )}
+
+          {activeTab === 'wishlist' && (
+            <WishlistTab
+              wishlistList={wishlistList}
+              libraryMap={libraryMap}
+              wishlistMap={wishlistMap}
+              handleToggleWishlist={handleToggleWishlist}
+              handleUpdateWishlistQty={handleUpdateWishlistQty}
+              setPreviewImage={setPreviewImage}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
