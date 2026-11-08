@@ -93,8 +93,9 @@ export default function CardItem({
               <select
                 defaultValue=""
                 onChange={(e) => {
-                  if (e.target.value) {
-                    handleUpdateDeckCard(card, 1, e.target.value);
+                  const selectedDeckId = e.target.value;
+                  if (selectedDeckId) {
+                    handleUpdateDeckCard(card, 1, selectedDeckId);
                     e.target.value = '';
                   }
                 }}

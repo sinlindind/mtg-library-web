@@ -135,17 +135,44 @@ export function useDecks(session) {
     }
   };
 
-  // Add or update card quantity in active deck
-  const handleUpdateDeckCard = async (card, delta, board = 'mainboard') => {
-    if (!activeDeck) return;
+  // Add or update card quantity in active deck (or target deck specified by ID)
+  const handleUpdateDeckCard = async (card, delta, boardOrDeckId = 'mainboard', maybeBoard = 'mainboard') => {
+    // Determine if boardOrDeckId is a UUID/deck id or board name ('mainboard' / 'sideboard')
+    let targetDeckId = activeDeck?.id;
+    let board = maybeBoard;
+
+    if (boardOrDeckId && (boardOrDeckId === 'mainboard' || boardOrDeckId === 'sideboard')) {
+      board = boardOrDeckId;
+    } else if (boardOrDeckId) {
+      targetDeckId = boardOrDeckId;
+    }
+
+    if (!targetDeckId) {
+      console.error('Cannot update deck card: No active or selected deck.');
+      return;
+    }
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    const currentCards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
-    const existingIndex = currentCards.findIndex(
+    
+    // Fetch current cards for target deck if different from activeDeckCards
+    let targetDeckCards = activeDeckCards;
+    if (targetDeckId !== activeDeck?.id) {
+      try {
+        const { data } = await supabase
+          .from('deck_cards')
+          .select('*')
+          .eq('deck_id', targetDeckId);
+        targetDeckCards = Array.isArray(data) ? data : [];
+      } catch (err) {
+        console.error('Error fetching target deck cards:', err.message);
+      }
+    }
+
+    const existingIndex = targetDeckCards.findIndex(
       (c) => c.scryfall_id === scryfallId && c.board === board
     );
 
-    const existingCard = currentCards[existingIndex];
+    const existingCard = targetDeckCards[existingIndex];
     const newQty = (existingCard?.quantity || 0) + delta;
 
     if (newQty <= 0) {
@@ -156,9 +183,11 @@ export function useDecks(session) {
           .eq('id', existingCard.id);
 
         if (!error) {
-          setActiveDeckCards((prev) =>
-            Array.isArray(prev) ? prev.filter((c) => c.id !== existingCard.id) : []
-          );
+          if (targetDeckId === activeDeck?.id) {
+            setActiveDeckCards((prev) =>
+              Array.isArray(prev) ? prev.filter((c) => c.id !== existingCard.id) : []
+            );
+          }
           await fetchAllDeckCards(decks);
         }
       }
@@ -166,7 +195,7 @@ export function useDecks(session) {
     }
 
     const payload = {
-      deck_id: activeDeck.id,
+      deck_id: targetDeckId,
       scryfall_id: scryfallId,
       card_name: card.name || card.card_name,
       set_name: card.set_name || '',
@@ -187,11 +216,13 @@ export function useDecks(session) {
         .single();
 
       if (!error && data) {
-        setActiveDeckCards((prev) =>
-          Array.isArray(prev)
-            ? prev.map((c) => (c.id === data.id ? data : c))
-            : [data]
-        );
+        if (targetDeckId === activeDeck?.id) {
+          setActiveDeckCards((prev) =>
+            Array.isArray(prev)
+              ? prev.map((c) => (c.id === data.id ? data : c))
+              : [data]
+          );
+        }
         await fetchAllDeckCards(decks);
       }
     } else {
@@ -202,7 +233,9 @@ export function useDecks(session) {
         .single();
 
       if (!error && data) {
-        setActiveDeckCards((prev) => [...(Array.isArray(prev) ? prev : []), data]);
+        if (targetDeckId === activeDeck?.id) {
+          setActiveDeckCards((prev) => [...(Array.isArray(prev) ? prev : []), data]);
+        }
         await fetchAllDeckCards(decks);
       }
     }
