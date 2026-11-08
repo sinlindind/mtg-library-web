@@ -13,6 +13,7 @@ export default function CardItem({
   decks = [],
   activeDeck = null,
   handleUpdateDeckCard,
+  cardDecks = [], // Array of decks this card belongs to
   // Tag Props
   currentTags = [],
   availableTags = [],
@@ -61,6 +62,21 @@ export default function CardItem({
           </button>
         </div>
         <p className="text-base text-slate-500">{card.set_name}</p>
+
+        {/* Deck Memberships Badges */}
+        {cardDecks && cardDecks.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center pt-1">
+            <span className="text-xs font-semibold text-slate-500">Decks:</span>
+            {cardDecks.map((d) => (
+              <span
+                key={d.deckId}
+                className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-md text-xs font-medium border border-indigo-200 dark:border-indigo-800"
+              >
+                🛡️ {d.deckName} ({d.quantity}x)
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Add to Deck Quick Action */}
         {handleUpdateDeckCard && decks.length > 0 && (

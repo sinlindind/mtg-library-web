@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 export function useDecks(session) {
   const [decks, setDecks] = useState([]);
   const [activeDeck, setActiveDeck] = useState(null);
   const [activeDeckCards, setActiveDeckCards] = useState([]);
+  const [allDeckCards, setAllDeckCards] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Fetch all decks for current user
@@ -19,14 +20,38 @@ export function useDecks(session) {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setDecks(Array.isArray(data) ? data : []);
+      const fetchedDecks = Array.isArray(data) ? data : [];
+      setDecks(fetchedDecks);
+      await fetchAllDeckCards(fetchedDecks);
     } catch (err) {
       console.error('Error fetching decks:', err.message);
       setDecks([]);
+      setAllDeckCards([]);
     } finally {
       setLoading(false);
     }
   }, [session?.user?.id]);
+
+  // Fetch all cards across all user decks for library/search cross-referencing
+  const fetchAllDeckCards = useCallback(async (userDecks) => {
+    if (!userDecks || userDecks.length === 0) {
+      setAllDeckCards([]);
+      return;
+    }
+    try {
+      const deckIds = userDecks.map((d) => d.id);
+      const { data, error } = await supabase
+        .from('deck_cards')
+        .select('id, deck_id, scryfall_id, card_name, quantity, board')
+        .in('deck_id', deckIds);
+
+      if (error) throw error;
+      setAllDeckCards(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching all deck cards:', err.message);
+      setAllDeckCards([]);
+    }
+  }, []);
 
   // Fetch cards belonging to a specific deck
   const fetchDeckCards = useCallback(async (deckId) => {
@@ -46,6 +71,26 @@ export function useDecks(session) {
     }
   }, []);
 
+  // Lookup map: scryfall_id -> array of decks containing this card
+  const cardDecksMap = useMemo(() => {
+    const map = {};
+    allDeckCards.forEach((dc) => {
+      const cleanSid = String(dc.scryfall_id || '').trim().toLowerCase();
+      if (!cleanSid) return;
+      const deck = decks.find((d) => d.id === dc.deck_id);
+      if (!map[cleanSid]) {
+        map[cleanSid] = [];
+      }
+      map[cleanSid].push({
+        deckId: dc.deck_id,
+        deckName: deck ? deck.name : 'Unknown Deck',
+        quantity: dc.quantity,
+        board: dc.board,
+      });
+    });
+    return map;
+  }, [allDeckCards, decks]);
+
   // Create a new deck
   const handleCreateDeck = async (name, format = 'commander') => {
     if (!session?.user?.id || !name.trim()) {
@@ -61,7 +106,12 @@ export function useDecks(session) {
         .single();
 
       if (error) throw error;
-      // Update local state...
+      if (data) {
+        const updatedDecks = [data, ...decks];
+        setDecks(updatedDecks);
+        setActiveDeck(data);
+        await fetchAllDeckCards(updatedDecks);
+      }
     } catch (err) {
       console.error('Error creating deck:', err.message);
     }
@@ -73,11 +123,13 @@ export function useDecks(session) {
       const { error } = await supabase.from('user_decks').delete().eq('id', deckId);
       if (error) throw error;
 
-      setDecks((prev) => (Array.isArray(prev) ? prev.filter((d) => d.id !== deckId) : []));
+      const updatedDecks = decks.filter((d) => d.id !== deckId);
+      setDecks(updatedDecks);
       if (activeDeck?.id === deckId) {
         setActiveDeck(null);
         setActiveDeckCards([]);
       }
+      await fetchAllDeckCards(updatedDecks);
     } catch (err) {
       console.error('Error deleting deck:', err.message);
     }
@@ -107,6 +159,7 @@ export function useDecks(session) {
           setActiveDeckCards((prev) =>
             Array.isArray(prev) ? prev.filter((c) => c.id !== existingCard.id) : []
           );
+          await fetchAllDeckCards(decks);
         }
       }
       return;
@@ -139,6 +192,7 @@ export function useDecks(session) {
             ? prev.map((c) => (c.id === data.id ? data : c))
             : [data]
         );
+        await fetchAllDeckCards(decks);
       }
     } else {
       const { data, error } = await supabase
@@ -149,6 +203,7 @@ export function useDecks(session) {
 
       if (!error && data) {
         setActiveDeckCards((prev) => [...(Array.isArray(prev) ? prev : []), data]);
+        await fetchAllDeckCards(decks);
       }
     }
   };
@@ -200,6 +255,7 @@ export function useDecks(session) {
     activeDeck,
     setActiveDeck,
     activeDeckCards: Array.isArray(activeDeckCards) ? activeDeckCards : [],
+    cardDecksMap,
     loading,
     fetchDecks,
     fetchDeckCards,

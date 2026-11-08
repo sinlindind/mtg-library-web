@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CardItem from './CardItem';
 import { normalizeTags } from '../utils/tagUtils';
-import { fetchScryfallDetailsChunked } from '../services/scryfall';
 
 export default function LibraryTab({
   libraryList,
@@ -22,6 +21,7 @@ export default function LibraryTab({
   decks,
   activeDeck,
   handleUpdateDeckCard,
+  cardDecksMap = {},
 }) {
   const [librarySearch, setLibrarySearch] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
@@ -187,6 +187,7 @@ export default function LibraryTab({
             const scryfallId = String(card.scryfall_id).trim().toLowerCase();
             const currentTags = normalizeTags(card.tags);
             const isDropdownOpen = activeTagDropdown === scryfallId;
+            const cardDecks = cardDecksMap[scryfallId] || [];
 
             return (
               <CardItem
@@ -212,6 +213,7 @@ export default function LibraryTab({
                 decks={decks}
                 activeDeck={activeDeck}
                 handleUpdateDeckCard={handleUpdateDeckCard}
+                cardDecks={cardDecks}
               />
             );
           })
