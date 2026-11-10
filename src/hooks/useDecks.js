@@ -135,10 +135,9 @@ export function useDecks(session) {
     }
   };
 
-  // Add or update card quantity in active deck (or target deck specified by ID)
-  const handleUpdateDeckCard = async (card, delta, boardOrDeckId = 'mainboard', maybeBoard = 'mainboard') => {
-    // Determine if boardOrDeckId is a UUID/deck id or board name ('mainboard' / 'sideboard')
-    let targetDeckId = activeDeck?.id;
+  // Add or update card quantity in a deck (supports explicit targetDeckId or activeDeck)
+  const handleUpdateDeckCard = async (card, delta, boardOrDeckId = 'mainboard', maybeBoard = 'mainboard', explicitDeckId = null) => {
+    let targetDeckId = explicitDeckId || activeDeck?.id;
     let board = maybeBoard;
 
     if (boardOrDeckId && (boardOrDeckId === 'mainboard' || boardOrDeckId === 'sideboard')) {
@@ -148,13 +147,13 @@ export function useDecks(session) {
     }
 
     if (!targetDeckId) {
-      console.error('Cannot update deck card: No active or selected deck.');
+      alert('Please select or create a deck first.');
       return;
     }
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
     
-    // Fetch current cards for target deck if different from activeDeckCards
+    // Fetch current cards for target deck if needed
     let targetDeckCards = activeDeckCards;
     if (targetDeckId !== activeDeck?.id) {
       try {
@@ -169,7 +168,7 @@ export function useDecks(session) {
     }
 
     const existingIndex = targetDeckCards.findIndex(
-      (c) => c.scryfall_id === scryfallId && c.board === board
+      (c) => String(c.scryfall_id).trim().toLowerCase() === scryfallId && c.board === board
     );
 
     const existingCard = targetDeckCards[existingIndex];
@@ -244,12 +243,15 @@ export function useDecks(session) {
   // One-click: Send missing deck cards directly to Wishlist
   const handleExportMissingToWishlist = async (libraryMap, fetchWishlist) => {
     const cards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
-    if (!cards.length || !session?.user?.id) return;
+    if (!cards.length || !session?.user?.id) {
+      alert('No active deck selected or deck is empty!');
+      return;
+    }
 
     const missingItems = [];
 
     cards.forEach((dc) => {
-      const libraryEntry = (libraryMap && libraryMap[dc.scryfall_id]) || { reg: 0, foil: 0 };
+      const libraryEntry = (libraryMap && libraryMap[String(dc.scryfall_id).trim().toLowerCase()]) || { reg: 0, foil: 0 };
       const totalOwned = (libraryEntry.reg || 0) + (libraryEntry.foil || 0);
 
       if (totalOwned < dc.quantity) {
@@ -277,9 +279,12 @@ export function useDecks(session) {
 
       if (error) throw error;
       alert(`Added ${missingItems.length} missing card types to your Wishlist!`);
-      if (fetchWishlist) fetchWishlist(session.user.id);
+      if (typeof fetchWishlist === 'function') {
+        fetchWishlist(session.user.id);
+      }
     } catch (err) {
       console.error('Error sending missing cards to Wishlist:', err.message);
+      alert(`Export to Wishlist failed: ${err.message}`);
     }
   };
 

@@ -63,16 +63,25 @@ export default function CardItem({
         </div>
         <p className="text-base text-slate-500">{card.set_name}</p>
 
-        {/* Deck Memberships Badges */}
+        {/* Deck Memberships Badges with Interactive Remove Button */}
         {cardDecks && cardDecks.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center pt-1">
             <span className="text-xs font-semibold text-slate-500">Decks:</span>
             {cardDecks.map((d) => (
               <span
-                key={d.deckId}
-                className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-md text-xs font-medium border border-indigo-200 dark:border-indigo-800"
+                key={`${d.deckId}-${d.board || 'mainboard'}`}
+                className="inline-flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-md text-xs font-medium border border-indigo-200 dark:border-indigo-800"
               >
                 🛡️ {d.deckName} ({d.quantity}x)
+                {handleUpdateDeckCard && (
+                  <button
+                    onClick={() => handleUpdateDeckCard(card, -d.quantity, d.board || 'mainboard', d.deckId)}
+                    className="text-indigo-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer transition-colors"
+                    title={`Remove from ${d.deckName}`}
+                  >
+                    ×
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -84,7 +93,7 @@ export default function CardItem({
             <span className="text-xs font-semibold text-slate-500">Add to Deck:</span>
             {activeDeck ? (
               <button
-                onClick={() => handleUpdateDeckCard(card, 1, activeDeck.id)}
+                onClick={() => handleUpdateDeckCard(card, 1, 'mainboard', 'mainboard', activeDeck.id)}
                 className="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium cursor-pointer transition-colors"
               >
                 + {activeDeck.name}
@@ -95,7 +104,7 @@ export default function CardItem({
                 onChange={(e) => {
                   const selectedDeckId = e.target.value;
                   if (selectedDeckId) {
-                    handleUpdateDeckCard(card, 1, selectedDeckId);
+                    handleUpdateDeckCard(card, 1, 'mainboard', 'mainboard', selectedDeckId);
                     e.target.value = '';
                   }
                 }}
