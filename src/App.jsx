@@ -40,6 +40,10 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
 
+  // Tag dropdown state shared across tabs
+  const [activeTagDropdown, setActiveTagDropdown] = useState(null);
+  const [tagInputVal, setTagInputVal] = useState('');
+
   // Export Modal & Options State
   const [showExportModal, setShowExportModal] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -152,7 +156,6 @@ export default function App() {
         if (response.ok) {
           const data = await response.json();
           (data.data || []).forEach((scryCard) => {
-            // Handle double-faced cards cleanly
             const combinedOracleText = scryCard.card_faces
               ? scryCard.card_faces
                   .map((f) => `${f.name}: ${f.oracle_text || ''}`)
@@ -567,6 +570,18 @@ export default function App() {
               handleToggleWishlist={handleToggleWishlist}
               handleUpdateWishlistQty={handleUpdateWishlistQty}
               setPreviewImage={setPreviewImage}
+              decks={decks}
+              activeDeck={activeDeck}
+              handleUpdateDeckCard={handleUpdateDeckCard}
+              cardDecksMap={cardDecksMap}
+              availableTags={availableTags}
+              activeTagDropdown={activeTagDropdown}
+              setActiveTagDropdown={setActiveTagDropdown}
+              handleRemoveTag={handleRemoveTag}
+              handleToggleTagCheck={handleToggleTagCheck}
+              handleAddTag={handleAddTag}
+              tagInputVal={tagInputVal}
+              setTagInputVal={setTagInputVal}
             />
           )}
         </div>
