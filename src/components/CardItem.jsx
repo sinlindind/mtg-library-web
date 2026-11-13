@@ -32,7 +32,7 @@ export default function CardItem({
   const totalOwned = owned.reg + owned.foil;
   const isWishlisted = !!wishlistMap[scryfallId];
 
-  // Price calculations from Scryfall data (supports card.prices?.usd or card.usd)
+  // Price calculations
   const unitPrice = parseFloat(card.prices?.usd || card.usd || 0);
   const desiredQty = card.desired_quantity || 1;
 
@@ -65,7 +65,7 @@ export default function CardItem({
         </div>
         <p className="text-base text-slate-500">{card.set_name}</p>
 
-        {/* TCGplayer Price Badge */}
+        {/* TCGplayer Price Badge on Card Tile */}
         {unitPrice > 0 && (
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 w-fit">
             <span>TCGplayer:</span>

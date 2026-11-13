@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CardItem from './CardItem';
 
 export default function WishlistTab({
@@ -23,8 +23,76 @@ export default function WishlistTab({
 }) {
   const [wishlistSearch, setWishlistSearch] = useState('');
   const [wishlistSort, setWishlistSort] = useState('name');
+  const [enrichedWishlist, setEnrichedWishlist] = useState(wishlistList);
 
-  const filteredWishlist = wishlistList.filter(
+  // Automatically fetch Scryfall prices & metadata for wishlist cards missing price data
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPrices() {
+      if (!wishlistList || wishlistList.length === 0) {
+        if (isMounted) setEnrichedWishlist([]);
+        return;
+      }
+
+      const needsPrices = wishlistList.filter(
+        (c) => c.scryfall_id && (!c.prices || c.prices.usd === undefined)
+      );
+
+      if (needsPrices.length === 0) {
+        if (isMounted) setEnrichedWishlist(wishlistList);
+        return;
+      }
+
+      const priceMap = {};
+      const chunkSize = 75; // Scryfall batch limit
+
+      for (let i = 0; i < needsPrices.length; i += chunkSize) {
+        const batch = needsPrices.slice(i, i + chunkSize);
+        try {
+          const identifiers = batch.map((c) => ({ id: c.scryfall_id }));
+          const res = await fetch('https://api.scryfall.com/cards/collection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifiers }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            (data.data || []).forEach((scryCard) => {
+              priceMap[scryCard.id.toLowerCase()] = {
+                prices: scryCard.prices || {},
+                image_uris: scryCard.image_uris || scryCard.card_faces?.[0]?.image_uris,
+              };
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to fetch Scryfall prices for wishlist:', err);
+        }
+      }
+
+      if (!isMounted) return;
+
+      const merged = wishlistList.map((card) => {
+        const id = String(card.scryfall_id || '').toLowerCase();
+        const extra = priceMap[id] || {};
+        return {
+          ...card,
+          prices: card.prices || extra.prices || {},
+          image_uris: card.image_uris || extra.image_uris || card.image_url,
+        };
+      });
+
+      setEnrichedWishlist(merged);
+    }
+
+    fetchPrices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [wishlistList]);
+
+  const filteredWishlist = enrichedWishlist.filter(
     (card) =>
       card.card_name?.toLowerCase().includes(wishlistSearch.toLowerCase()) ||
       card.set_name?.toLowerCase().includes(wishlistSearch.toLowerCase())
@@ -81,12 +149,14 @@ export default function WishlistTab({
           </select>
         </div>
 
-        <div className="px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-semibold flex items-center justify-between sm:justify-center gap-2">
-          <span className="text-slate-500">Total Est:</span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-            ${totalWishlistCost.toFixed(2)}
-          </span>
-        </div>
+        {totalWishlistCost > 0 && (
+          <div className="px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-semibold flex items-center justify-between sm:justify-center gap-2">
+            <span className="text-slate-500">Total Est:</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+              ${totalWishlistCost.toFixed(2)}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -106,8 +176,9 @@ export default function WishlistTab({
                 handleToggleWishlist={handleToggleWishlist}
                 handleUpdateWishlistQty={handleUpdateWishlistQty}
                 decks={decks}
-                cardDecks={cardDecksMap[scryfallId] || []}
+                activeDeck={activeDeck}
                 handleUpdateDeckCard={handleUpdateDeckCard}
+                cardDecks={cardDecksMap[scryfallId] || []}
                 currentTags={card.tags || []}
                 availableTags={availableTags}
                 isDropdownOpen={activeTagDropdown === scryfallId}
