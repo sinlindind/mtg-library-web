@@ -2,18 +2,16 @@ import React from 'react';
 
 export default function CardItem({
   card,
-  type, // 'search' | 'library' | 'wishlist'
+  type, // 'search' | 'library' | 'wishlist' | 'deck'
   libraryMap = {},
   wishlistMap = {},
+  decks = [],
+  cardDecks = [], // Array of decks this card belongs to
   setPreviewImage,
   handleToggleWishlist,
   handleUpdateQuantity,
   handleUpdateWishlistQty,
-  // Deck Integration Props
-  decks = [],
-  activeDeck = null,
   handleUpdateDeckCard,
-  cardDecks = [], // Array of decks this card belongs to
   // Tag Props
   currentTags = [],
   availableTags = [],
@@ -29,12 +27,12 @@ export default function CardItem({
   const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
   const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
   const cardName = card.name || card.card_name;
-
+  
   const owned = libraryMap[scryfallId] || { reg: card.reg_quantity || 0, foil: card.foil_quantity || 0 };
   const totalOwned = owned.reg + owned.foil;
   const isWishlisted = !!wishlistMap[scryfallId];
 
-  // Price calculations
+  // Price calculations from Scryfall data (supports card.prices?.usd or card.usd)
   const unitPrice = parseFloat(card.prices?.usd || card.usd || 0);
   const desiredQty = card.desired_quantity || 1;
 
@@ -67,7 +65,7 @@ export default function CardItem({
         </div>
         <p className="text-base text-slate-500">{card.set_name}</p>
 
-        {/* TCGplayer Price Display on Card Tile */}
+        {/* TCGplayer Price Badge */}
         {unitPrice > 0 && (
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 w-fit">
             <span>TCGplayer:</span>
@@ -80,7 +78,14 @@ export default function CardItem({
           </div>
         )}
 
-        {/* Deck Memberships Badges with Interactive Remove Button */}
+        {/* Search / Library Context Details */}
+        {totalOwned > 0 && type !== 'library' && (
+          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
+            📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
+          </span>
+        )}
+
+        {/* Deck Membership Badges with Interactive Remove Button */}
         {cardDecks && cardDecks.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center pt-1">
             <span className="text-xs font-semibold text-slate-500">Decks:</span>
@@ -104,45 +109,29 @@ export default function CardItem({
           </div>
         )}
 
-        {/* Add to Deck Quick Action */}
-        {handleUpdateDeckCard && decks.length > 0 && (
-          <div className="flex items-center gap-2 pt-1">
-            <span className="text-xs font-semibold text-slate-500">Add to Deck:</span>
-            {activeDeck ? (
-              <button
-                onClick={() => handleUpdateDeckCard(card, 1, 'mainboard', 'mainboard', activeDeck.id)}
-                className="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium cursor-pointer transition-colors"
-              >
-                + {activeDeck.name}
-              </button>
-            ) : (
-              <select
-                defaultValue=""
-                onChange={(e) => {
-                  const selectedDeckId = e.target.value;
-                  if (selectedDeckId) {
-                    handleUpdateDeckCard(card, 1, 'mainboard', 'mainboard', selectedDeckId);
-                    e.target.value = '';
-                  }
-                }}
-                className="p-1 text-xs border rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer"
-              >
-                <option value="" disabled>Select deck...</option>
-                {decks.map((deck) => (
-                  <option key={deck.id} value={deck.id}>
-                    {deck.name}
-                  </option>
-                ))}
-              </select>
-            )}
+        {/* Quick Add To Deck Dropdown */}
+        {decks.length > 0 && handleUpdateDeckCard && (
+          <div className="pt-1">
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleUpdateDeckCard(card, 1, 'mainboard', e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              className="text-xs p-2 border rounded-lg border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer"
+            >
+              <option value="" disabled>
+                + Add to Deck...
+              </option>
+              {decks.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-
-        {/* Search Context Details */}
-        {type === 'search' && totalOwned > 0 && (
-          <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
-            📦 In Library: {totalOwned}x ({owned.reg} Reg | {owned.foil} Foil)
-          </span>
         )}
 
         {/* Tag Section */}

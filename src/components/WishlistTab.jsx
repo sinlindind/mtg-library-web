@@ -106,9 +106,8 @@ export default function WishlistTab({
                 handleToggleWishlist={handleToggleWishlist}
                 handleUpdateWishlistQty={handleUpdateWishlistQty}
                 decks={decks}
-                activeDeck={activeDeck}
-                handleUpdateDeckCard={handleUpdateDeckCard}
                 cardDecks={cardDecksMap[scryfallId] || []}
+                handleUpdateDeckCard={handleUpdateDeckCard}
                 currentTags={card.tags || []}
                 availableTags={availableTags}
                 isDropdownOpen={activeTagDropdown === scryfallId}
