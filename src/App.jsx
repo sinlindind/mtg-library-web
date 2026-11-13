@@ -9,6 +9,31 @@ import DecksTab from './components/DecksTab';
 import WishlistTab from './components/WishlistTab';
 import Login from './components/Login';
 
+const COLOR_NAMES = {
+  W: 'White',
+  U: 'Blue',
+  B: 'Black',
+  R: 'Red',
+  G: 'Green',
+};
+
+function formatManaColors(colors) {
+  if (!colors || colors.length === 0) return 'Colorless';
+  if (Array.isArray(colors)) {
+    return colors.map((c) => COLOR_NAMES[c] || c).join(', ');
+  }
+  return String(colors);
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [activeTab, setActiveTab] = useState('search');
@@ -23,11 +48,13 @@ export default function App() {
   const [selectedFields, setSelectedFields] = useState({
     card_name: true,
     set_name: true,
+    mana_colors: true,
+    type_line: true,
+    oracle_text: true,
     reg_quantity: true,
     foil_quantity: true,
     scryfall_id: true,
     tags: true,
-    image_url: false,
   });
 
   const {
@@ -85,15 +112,260 @@ export default function App() {
     }
   }, [session, fetchLibrary, fetchWishlist, fetchDecks]);
 
-  const handleExecuteExport = () => {
+  // Enriches library items with Scryfall metadata (mana colors, oracle text, type line) if not already on the record
+  const enrichCardsWithScryfallData = async (cards) => {
+    const needsEnrichment = cards.filter(
+      (c) =>
+        c.scryfall_id &&
+        (c.oracle_text === undefined || c.colors === undefined || c.type_line === undefined)
+    );
+
+    if (needsEnrichment.length === 0) {
+      return cards.map((c) => ({
+        ...c,
+        mana_colors: formatManaColors(c.colors || c.color_identity),
+        oracle_text: c.oracle_text || '',
+        type_line: c.type_line || '',
+      }));
+    }
+
+    const scryfallMap = {};
+    const chunkSize = 75; // Scryfall /cards/collection max batch size
+
+    for (let i = 0; i < needsEnrichment.length; i += chunkSize) {
+      const batch = needsEnrichment.slice(i, i + chunkSize);
+      setExportProgress(
+        `Fetching card text & mana colors from Scryfall (${Math.min(
+          i + chunkSize,
+          needsEnrichment.length
+        )}/${needsEnrichment.length})...`
+      );
+
+      try {
+        const identifiers = batch.map((c) => ({ id: c.scryfall_id }));
+        const response = await fetch('https://api.scryfall.com/cards/collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifiers }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          (data.data || []).forEach((scryCard) => {
+            // Handle double-faced cards cleanly
+            const combinedOracleText = scryCard.card_faces
+              ? scryCard.card_faces
+                  .map((f) => `${f.name}: ${f.oracle_text || ''}`)
+                  .join(' // ')
+              : scryCard.oracle_text || '';
+
+            const colors =
+              scryCard.colors ||
+              (scryCard.card_faces ? scryCard.card_faces[0]?.colors : null) ||
+              scryCard.color_identity ||
+              [];
+
+            scryfallMap[scryCard.id.toLowerCase()] = {
+              mana_colors: formatManaColors(colors),
+              oracle_text: combinedOracleText,
+              type_line: scryCard.type_line || '',
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Scryfall batch enrichment warning:', err);
+      }
+    }
+
+    return cards.map((card) => {
+      const id = String(card.scryfall_id || '').toLowerCase();
+      const enriched = scryfallMap[id] || {};
+      return {
+        ...card,
+        mana_colors:
+          enriched.mana_colors ?? formatManaColors(card.colors || card.color_identity),
+        oracle_text: enriched.oracle_text ?? card.oracle_text ?? '',
+        type_line: enriched.type_line ?? card.type_line ?? '',
+      };
+    });
+  };
+
+  const generatePdfExport = (enrichedList, activeFields) => {
+    const printWindow = window.open('', '_blank', 'width=960,height=800');
+    if (!printWindow) {
+      throw new Error('Pop-up blocked. Please allow pop-ups for this site to generate the PDF.');
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    const cardRowsHtml = enrichedList
+      .map((item) => {
+        const tagsStr = Array.isArray(item.tags) ? item.tags.join(', ') : item.tags || '';
+        const details = [];
+
+        if (activeFields.includes('set_name') && item.set_name) {
+          details.push(`<strong>Set:</strong> ${escapeHtml(item.set_name)}`);
+        }
+        if (activeFields.includes('mana_colors')) {
+          details.push(`<strong>Mana Colors:</strong> ${escapeHtml(item.mana_colors)}`);
+        }
+        if (activeFields.includes('reg_quantity') || activeFields.includes('foil_quantity')) {
+          const reg = activeFields.includes('reg_quantity') ? `Reg: ${item.reg_quantity ?? 0}` : '';
+          const foil = activeFields.includes('foil_quantity')
+            ? `Foil: ${item.foil_quantity ?? 0}`
+            : '';
+          details.push(`<strong>Qty:</strong> ${[reg, foil].filter(Boolean).join(' | ')}`);
+        }
+        if (activeFields.includes('tags') && tagsStr) {
+          details.push(`<strong>Tags:</strong> ${escapeHtml(tagsStr)}`);
+        }
+        if (activeFields.includes('scryfall_id') && item.scryfall_id) {
+          details.push(`<strong>Scryfall ID:</strong> <code>${escapeHtml(item.scryfall_id)}</code>`);
+        }
+
+        return `
+          <div class="card-entry">
+            <div class="card-header">
+              <span class="card-title">${
+                activeFields.includes('card_name') ? escapeHtml(item.card_name) : 'Card Entry'
+              }</span>
+              ${
+                activeFields.includes('type_line') && item.type_line
+                  ? `<span class="card-type">${escapeHtml(item.type_line)}</span>`
+                  : ''
+              }
+            </div>
+            <div class="card-meta">${details.join(' &nbsp;•&nbsp; ')}</div>
+            ${
+              activeFields.includes('oracle_text')
+                ? `<div class="card-text">${escapeHtml(
+                    item.oracle_text || 'No card text / abilities.'
+                  ).replace(/\n/g, '<br/>')}</div>`
+                : ''
+            }
+          </div>
+        `;
+      })
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>MTG Library Extract - ${dateStr}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #0f172a;
+              margin: 24px;
+              line-height: 1.45;
+              font-size: 12px;
+            }
+            header {
+              border-bottom: 2px solid #0f172a;
+              padding-bottom: 10px;
+              margin-bottom: 18px;
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+            }
+            h1 {
+              margin: 0;
+              font-size: 20px;
+            }
+            .summary {
+              color: #475569;
+              font-size: 12px;
+            }
+            .card-entry {
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              padding: 10px 12px;
+              margin-bottom: 10px;
+              page-break-inside: avoid;
+              background-color: #ffffff;
+            }
+            .card-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: baseline;
+              border-bottom: 1px solid #e2e8f0;
+              padding-bottom: 4px;
+              margin-bottom: 6px;
+            }
+            .card-title {
+              font-weight: 700;
+              font-size: 14px;
+              color: #0f172a;
+            }
+            .card-type {
+              font-style: italic;
+              color: #334155;
+              font-size: 12px;
+            }
+            .card-meta {
+              color: #334155;
+              font-size: 11px;
+              margin-bottom: 6px;
+            }
+            .card-text {
+              background-color: #f8fafc;
+              border-left: 3px solid #64748b;
+              padding: 6px 8px;
+              color: #1e293b;
+              font-size: 11.5px;
+            }
+            code {
+              font-family: monospace;
+              font-size: 10.5px;
+            }
+            @media print {
+              body { margin: 12px; }
+            }
+          </style>
+        </head>
+        <body>
+          <header>
+            <h1>MTG Library Extract</h1>
+            <div class="summary">Generated: ${dateStr} &nbsp;|&nbsp; Total Cards: ${enrichedList.length}</div>
+          </header>
+          ${cardRowsHtml}
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handleExecuteExport = async () => {
     setExporting(true);
     setExportProgress('Preparing export data...');
 
     try {
       const activeFields = Object.keys(selectedFields).filter((field) => selectedFields[field]);
-      
-      if (exportFormat === 'json') {
-        const exportData = libraryList.map((item) => {
+      const needsScryfallDetails =
+        activeFields.includes('mana_colors') ||
+        activeFields.includes('oracle_text') ||
+        activeFields.includes('type_line');
+
+      const exportableList = needsScryfallDetails
+        ? await enrichCardsWithScryfallData(libraryList)
+        : libraryList;
+
+      if (exportFormat === 'pdf') {
+        setExportProgress('Opening PDF print preview...');
+        generatePdfExport(exportableList, activeFields);
+      } else if (exportFormat === 'json') {
+        const exportData = exportableList.map((item) => {
           const filteredItem = {};
           activeFields.forEach((field) => {
             filteredItem[field] = item[field];
@@ -114,7 +386,7 @@ export default function App() {
         const headers = activeFields;
         const csvRows = [headers.join(',')];
 
-        libraryList.forEach((item) => {
+        exportableList.forEach((item) => {
           const row = headers.map((field) => {
             let val = item[field];
             if (Array.isArray(val)) {
@@ -154,6 +426,18 @@ export default function App() {
   if (!session) {
     return <Login />;
   }
+
+  const fieldLabels = {
+    card_name: 'Card Name',
+    set_name: 'Set Name',
+    mana_colors: 'Mana Colors',
+    type_line: 'Type Line',
+    oracle_text: 'Card Text & Abilities',
+    reg_quantity: 'Reg Quantity',
+    foil_quantity: 'Foil Quantity',
+    scryfall_id: 'Scryfall ID',
+    tags: 'Tags',
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -312,6 +596,7 @@ export default function App() {
                 >
                   <option value="csv">CSV (Comma Separated Values)</option>
                   <option value="json">JSON (JavaScript Object Notation)</option>
+                  <option value="pdf">PDF Extract (Printable Document)</option>
                 </select>
               </div>
 
@@ -328,7 +613,7 @@ export default function App() {
                         }
                         className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 cursor-pointer"
                       />
-                      <span className="capitalize">{field.replace('_', ' ')}</span>
+                      <span>{fieldLabels[field] || field.replace('_', ' ')}</span>
                     </label>
                   ))}
                 </div>
@@ -354,7 +639,11 @@ export default function App() {
                 disabled={exporting || libraryList.length === 0}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm cursor-pointer disabled:opacity-50"
               >
-                {exporting ? 'Exporting...' : 'Download Export'}
+                {exporting
+                  ? 'Exporting...'
+                  : exportFormat === 'pdf'
+                  ? 'Generate PDF'
+                  : 'Download Export'}
               </button>
             </div>
           </div>
