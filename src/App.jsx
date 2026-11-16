@@ -49,6 +49,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
+  const [exportSource, setExportSource] = useState('library'); // 'library' | 'wishlist' | 'deck' | 'unassigned'
   const [selectedFields, setSelectedFields] = useState({
     card_name: true,
     set_name: true,
@@ -59,6 +60,7 @@ export default function App() {
     foil_quantity: true,
     scryfall_id: true,
     tags: true,
+    image_url: true, // Enabled by default for PDF image option support
   });
 
   const {
@@ -116,12 +118,12 @@ export default function App() {
     }
   }, [session, fetchLibrary, fetchWishlist, fetchDecks]);
 
-  // Enriches library items with Scryfall metadata (mana colors, oracle text, type line) if not already on the record
+  // Enriches cards with Scryfall metadata (mana colors, oracle text, type line, image urls)
   const enrichCardsWithScryfallData = async (cards) => {
     const needsEnrichment = cards.filter(
       (c) =>
         c.scryfall_id &&
-        (c.oracle_text === undefined || c.colors === undefined || c.type_line === undefined)
+        (c.oracle_text === undefined || c.colors === undefined || c.type_line === undefined || !c.image_url)
     );
 
     if (needsEnrichment.length === 0) {
@@ -130,6 +132,7 @@ export default function App() {
         mana_colors: formatManaColors(c.colors || c.color_identity),
         oracle_text: c.oracle_text || '',
         type_line: c.type_line || '',
+        image_url: c.image_url || c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '',
       }));
     }
 
@@ -139,7 +142,7 @@ export default function App() {
     for (let i = 0; i < needsEnrichment.length; i += chunkSize) {
       const batch = needsEnrichment.slice(i, i + chunkSize);
       setExportProgress(
-        `Fetching card text & mana colors from Scryfall (${Math.min(
+        `Fetching card details from Scryfall (${Math.min(
           i + chunkSize,
           needsEnrichment.length
         )}/${needsEnrichment.length})...`
@@ -168,10 +171,16 @@ export default function App() {
               scryCard.color_identity ||
               [];
 
+            const imgUrl =
+              scryCard.image_uris?.normal ||
+              scryCard.card_faces?.[0]?.image_uris?.normal ||
+              '';
+
             scryfallMap[scryCard.id.toLowerCase()] = {
               mana_colors: formatManaColors(colors),
               oracle_text: combinedOracleText,
               type_line: scryCard.type_line || '',
+              image_url: imgUrl,
             };
           });
         }
@@ -189,17 +198,19 @@ export default function App() {
           enriched.mana_colors ?? formatManaColors(card.colors || card.color_identity),
         oracle_text: enriched.oracle_text ?? card.oracle_text ?? '',
         type_line: enriched.type_line ?? card.type_line ?? '',
+        image_url: card.image_url || enriched.image_url || '',
       };
     });
   };
 
-  const generatePdfExport = (enrichedList, activeFields) => {
+  const generatePdfExport = (enrichedList, activeFields, exportTitle) => {
     const printWindow = window.open('', '_blank', 'width=960,height=800');
     if (!printWindow) {
       throw new Error('Pop-up blocked. Please allow pop-ups for this site to generate the PDF.');
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
+    const includeImages = activeFields.includes('image_url');
 
     const cardRowsHtml = enrichedList
       .map((item) => {
@@ -213,12 +224,18 @@ export default function App() {
           details.push(`<strong>Mana Colors:</strong> ${escapeHtml(item.mana_colors)}`);
         }
         if (activeFields.includes('reg_quantity') || activeFields.includes('foil_quantity')) {
-          const reg = activeFields.includes('reg_quantity') ? `Reg: ${item.reg_quantity ?? 0}` : '';
+          const reg = activeFields.includes('reg_quantity') ? `Reg: ${item.reg_quantity ?? item.quantity ?? 0}` : '';
           const foil = activeFields.includes('foil_quantity')
             ? `Foil: ${item.foil_quantity ?? 0}`
             : '';
-          details.push(`<strong>Qty:</strong> ${[reg, foil].filter(Boolean).join(' | ')}`);
+          if (reg || foil) {
+            details.push(`<strong>Qty:</strong> ${[reg, foil].filter(Boolean).join(' | ')}`);
+          }
         }
+        else if (activeFields.includes('reg_quantity') && item.quantity !== undefined) {
+          details.push(`<strong>Qty:</strong> ${item.quantity}`);
+        }
+
         if (activeFields.includes('tags') && tagsStr) {
           details.push(`<strong>Tags:</strong> ${escapeHtml(tagsStr)}`);
         }
@@ -227,25 +244,32 @@ export default function App() {
         }
 
         return `
-          <div class="card-entry">
-            <div class="card-header">
-              <span class="card-title">${
-                activeFields.includes('card_name') ? escapeHtml(item.card_name) : 'Card Entry'
-              }</span>
+          <div class="card-entry ${includeImages ? 'with-image' : ''}">
+            ${
+              includeImages && item.image_url
+                ? `<div class="card-img-container"><img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.card_name || item.name)}" class="card-thumb" /></div>`
+                : ''
+            }
+            <div class="card-content">
+              <div class="card-header">
+                <span class="card-title">${
+                  activeFields.includes('card_name') ? escapeHtml(item.card_name || item.name) : 'Card Entry'
+                }</span>
+                ${
+                  activeFields.includes('type_line') && item.type_line
+                    ? `<span class="card-type">${escapeHtml(item.type_line)}</span>`
+                    : ''
+                }
+              </div>
+              <div class="card-meta">${details.join(' &nbsp;•&nbsp; ')}</div>
               ${
-                activeFields.includes('type_line') && item.type_line
-                  ? `<span class="card-type">${escapeHtml(item.type_line)}</span>`
+                activeFields.includes('oracle_text')
+                  ? `<div class="card-text">${escapeHtml(
+                      item.oracle_text || 'No card text / abilities.'
+                    ).replace(/\n/g, '<br/>')}</div>`
                   : ''
               }
             </div>
-            <div class="card-meta">${details.join(' &nbsp;•&nbsp; ')}</div>
-            ${
-              activeFields.includes('oracle_text')
-                ? `<div class="card-text">${escapeHtml(
-                    item.oracle_text || 'No card text / abilities.'
-                  ).replace(/\n/g, '<br/>')}</div>`
-                : ''
-            }
           </div>
         `;
       })
@@ -255,7 +279,7 @@ export default function App() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>MTG Library Extract - ${dateStr}</title>
+          <title>${escapeHtml(exportTitle)} - ${dateStr}</title>
           <style>
             body {
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -287,6 +311,22 @@ export default function App() {
               margin-bottom: 10px;
               page-break-inside: avoid;
               background-color: #ffffff;
+            }
+            .card-entry.with-image {
+              display: flex;
+              gap: 12px;
+              align-items: flex-start;
+            }
+            .card-img-container {
+              flex-shrink: 0;
+            }
+            .card-thumb {
+              width: 90px;
+              border-radius: 6px;
+              display: block;
+            }
+            .card-content {
+              flex: 1;
             }
             .card-header {
               display: flex;
@@ -324,12 +364,13 @@ export default function App() {
             }
             @media print {
               body { margin: 12px; }
+              .card-thumb { max-width: 80px; }
             }
           </style>
         </head>
         <body>
           <header>
-            <h1>MTG Library Extract</h1>
+            <h1>${escapeHtml(exportTitle)}</h1>
             <div class="summary">Generated: ${dateStr} &nbsp;|&nbsp; Total Cards: ${enrichedList.length}</div>
           </header>
           ${cardRowsHtml}
@@ -354,19 +395,42 @@ export default function App() {
     setExportProgress('Preparing export data...');
 
     try {
+      let rawSourceList = [];
+      let exportTitle = 'MTG Library Extract';
+
+      if (exportSource === 'wishlist') {
+        rawSourceList = wishlistList;
+        exportTitle = 'MTG Wishlist Extract';
+      } else if (exportSource === 'deck' && activeDeck) {
+        rawSourceList = activeDeckCards;
+        exportTitle = `MTG Deck Extract: ${activeDeck.name}`;
+      } else if (exportSource === 'unassigned') {
+        // Cards in library not present in cardDecksMap
+        rawSourceList = libraryList.filter((card) => {
+          const sid = String(card.scryfall_id || card.id).trim().toLowerCase();
+          const decksForCard = cardDecksMap[sid] || [];
+          return decksForCard.length === 0;
+        });
+        exportTitle = 'MTG Unassigned Cards Extract';
+      } else {
+        rawSourceList = libraryList;
+        exportTitle = 'MTG Library Extract';
+      }
+
       const activeFields = Object.keys(selectedFields).filter((field) => selectedFields[field]);
       const needsScryfallDetails =
         activeFields.includes('mana_colors') ||
         activeFields.includes('oracle_text') ||
-        activeFields.includes('type_line');
+        activeFields.includes('type_line') ||
+        activeFields.includes('image_url');
 
       const exportableList = needsScryfallDetails
-        ? await enrichCardsWithScryfallData(libraryList)
-        : libraryList;
+        ? await enrichCardsWithScryfallData(rawSourceList)
+        : rawSourceList;
 
       if (exportFormat === 'pdf') {
         setExportProgress('Opening PDF print preview...');
-        generatePdfExport(exportableList, activeFields);
+        generatePdfExport(exportableList, activeFields, exportTitle);
       } else if (exportFormat === 'json') {
         const exportData = exportableList.map((item) => {
           const filteredItem = {};
@@ -380,7 +444,7 @@ export default function App() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `mtg-library-export-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `mtg-${exportSource}-export-${new Date().toISOString().slice(0, 10)}.json`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -405,7 +469,7 @@ export default function App() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `mtg-library-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `mtg-${exportSource}-export-${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -440,6 +504,7 @@ export default function App() {
     foil_quantity: 'Foil Quantity',
     scryfall_id: 'Scryfall ID',
     tags: 'Tags',
+    image_url: 'Card Image (PDF Thumbnail)',
   };
 
   return (
@@ -447,12 +512,23 @@ export default function App() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold tracking-tight">MTG Personal Library</h1>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors cursor-pointer"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setExportSource('library');
+                setShowExportModal(true);
+              }}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-sm transition-colors flex items-center gap-1.5"
+            >
+              📥 Export Data
+            </button>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-6 border-b border-slate-800 pb-3 text-sm font-medium">
@@ -531,7 +607,10 @@ export default function App() {
               handleRemoveTag={handleRemoveTag}
               handleToggleTagCheck={handleToggleTagCheck}
               setPreviewImage={setPreviewImage}
-              setShowExportModal={setShowExportModal}
+              setShowExportModal={() => {
+                setExportSource('library');
+                setShowExportModal(true);
+              }}
               selectedFields={selectedFields}
               exportFormat={exportFormat}
               setExporting={setExporting}
@@ -559,6 +638,10 @@ export default function App() {
               wishlistMap={wishlistMap}
               fetchWishlist={fetchWishlist}
               setPreviewImage={setPreviewImage}
+              setShowExportModal={(source = 'deck') => {
+                setExportSource(source);
+                setShowExportModal(true);
+              }}
             />
           )}
 
@@ -582,6 +665,10 @@ export default function App() {
               handleAddTag={handleAddTag}
               tagInputVal={tagInputVal}
               setTagInputVal={setTagInputVal}
+              setShowExportModal={() => {
+                setExportSource('wishlist');
+                setShowExportModal(true);
+              }}
             />
           )}
         </div>
@@ -592,7 +679,7 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-5 text-slate-100 shadow-2xl">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h2 className="text-lg font-bold">📥 Export Library Collection</h2>
+              <h2 className="text-lg font-bold">📥 Export Collection Data</h2>
               <button
                 onClick={() => setShowExportModal(false)}
                 className="text-slate-400 hover:text-slate-200 text-sm font-bold cursor-pointer"
@@ -603,6 +690,22 @@ export default function App() {
 
             <div className="space-y-4 text-sm">
               <div>
+                <label className="block font-medium mb-1.5 text-slate-300">Export Source</label>
+                <select
+                  value={exportSource}
+                  onChange={(e) => setExportSource(e.target.value)}
+                  className="w-full p-2.5 border rounded-lg border-slate-700 bg-slate-800 text-slate-100"
+                >
+                  <option value="library">Full Library Collection ({libraryList.length} cards)</option>
+                  <option value="unassigned">Unassigned Library Cards (Not in any deck)</option>
+                  <option value="wishlist">Wishlist Collection ({wishlistList.length} cards)</option>
+                  {activeDeck && (
+                    <option value="deck">Active Deck: {activeDeck.name} ({activeDeckCards.length} cards)</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
                 <label className="block font-medium mb-1.5 text-slate-300">Export Format</label>
                 <select
                   value={exportFormat}
@@ -611,7 +714,7 @@ export default function App() {
                 >
                   <option value="csv">CSV (Comma Separated Values)</option>
                   <option value="json">JSON (JavaScript Object Notation)</option>
-                  <option value="pdf">PDF Extract (Printable Document)</option>
+                  <option value="pdf">PDF Extract (Printable Document with Optional Images)</option>
                 </select>
               </div>
 
@@ -651,7 +754,7 @@ export default function App() {
               </button>
               <button
                 onClick={handleExecuteExport}
-                disabled={exporting || libraryList.length === 0}
+                disabled={exporting}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm cursor-pointer disabled:opacity-50"
               >
                 {exporting
