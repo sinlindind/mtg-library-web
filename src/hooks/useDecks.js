@@ -135,15 +135,19 @@ export function useDecks(session) {
     }
   };
 
-  // Add or update card quantity in a deck (supports explicit targetDeckId or activeDeck)
+  // Add or update card quantity in a deck (robustly parses board and deck ID arguments)
   const handleUpdateDeckCard = async (card, delta, boardOrDeckId = 'mainboard', maybeBoard = 'mainboard', explicitDeckId = null) => {
     let targetDeckId = explicitDeckId || activeDeck?.id;
-    let board = maybeBoard;
+    let board = 'mainboard';
 
-    if (boardOrDeckId && (boardOrDeckId === 'mainboard' || boardOrDeckId === 'sideboard')) {
-      board = boardOrDeckId;
-    } else if (boardOrDeckId) {
-      targetDeckId = boardOrDeckId;
+    // Flexibly parse arguments to distinguish board names ('mainboard' / 'sideboard') from deck IDs
+    const args = [boardOrDeckId, maybeBoard, explicitDeckId].filter(Boolean);
+    for (const arg of args) {
+      if (arg === 'mainboard' || arg === 'sideboard') {
+        board = arg;
+      } else {
+        targetDeckId = arg;
+      }
     }
 
     if (!targetDeckId) {
