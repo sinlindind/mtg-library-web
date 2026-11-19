@@ -7,6 +7,7 @@ export default function CardItem({
   wishlistMap = {},
   decks = [],
   cardDecks = [], // Array of decks this card belongs to
+  isCommander = false,
   setPreviewImage,
   handleToggleWishlist,
   handleUpdateQuantity,
@@ -24,11 +25,21 @@ export default function CardItem({
   setTagInputVal,
 }) {
   const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-  const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || card.image_url;
-  const highResUrl = card.image_uris?.large || card.image_uris?.png || card.card_faces?.[0]?.image_uris?.large || imgUrl;
+  const imgUrl =
+    card.image_uris?.normal ||
+    card.card_faces?.[0]?.image_uris?.normal ||
+    card.image_url;
+  const highResUrl =
+    card.image_uris?.large ||
+    card.image_uris?.png ||
+    card.card_faces?.[0]?.image_uris?.large ||
+    imgUrl;
   const cardName = card.name || card.card_name;
-  
-  const owned = libraryMap[scryfallId] || { reg: card.reg_quantity || 0, foil: card.foil_quantity || 0 };
+
+  const owned = libraryMap[scryfallId] || {
+    reg: card.reg_quantity || 0,
+    foil: card.foil_quantity || 0,
+  };
   const totalOwned = owned.reg + owned.foil;
   const isWishlisted = !!wishlistMap[scryfallId];
 
@@ -37,13 +48,21 @@ export default function CardItem({
   const desiredQty = card.desired_quantity || 1;
 
   return (
-    <div className="flex flex-col sm:flex-row gap-6 p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-800 items-start w-full">
+    <div
+      className={`flex flex-col sm:flex-row gap-6 p-5 border rounded-xl items-start w-full transition-all ${
+        isCommander
+          ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-950/30 shadow-md shadow-amber-500/10'
+          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800'
+      }`}
+    >
       {imgUrl ? (
         <img
           src={imgUrl}
           alt={cardName}
           onClick={() => setPreviewImage(type === 'search' ? highResUrl : imgUrl)}
-          className="w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0"
+          className={`w-56 rounded-xl cursor-pointer transition-transform hover:scale-105 hover:shadow-xl shrink-0 ${
+            isCommander ? 'ring-2 ring-amber-400' : ''
+          }`}
           title="Click to view full resolution"
         />
       ) : (
@@ -53,9 +72,15 @@ export default function CardItem({
       )}
 
       <div className="flex-1 space-y-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h3 className="font-bold text-xl">{cardName}</h3>
+          {isCommander && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950">
+              👑 Commander
+            </span>
+          )}
           <button
+            type="button"
             onClick={() => handleToggleWishlist(card)}
             className="text-2xl transition-transform active:scale-125 cursor-pointer"
             title={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
@@ -69,7 +94,9 @@ export default function CardItem({
         {unitPrice > 0 && (
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/60 w-fit">
             <span>TCGplayer:</span>
-            <span className="text-slate-900 dark:text-slate-100 font-semibold">${unitPrice.toFixed(2)} each</span>
+            <span className="text-slate-900 dark:text-slate-100 font-semibold">
+              ${unitPrice.toFixed(2)} each
+            </span>
             {type === 'wishlist' && desiredQty > 1 && (
               <span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">
                 (Subtotal: ${(unitPrice * desiredQty).toFixed(2)})
@@ -97,7 +124,15 @@ export default function CardItem({
                 🛡️ {d.deckName} ({d.quantity}x)
                 {handleUpdateDeckCard && (
                   <button
-                    onClick={() => handleUpdateDeckCard(card, -d.quantity, d.board || 'mainboard', d.deckId)}
+                    type="button"
+                    onClick={() =>
+                      handleUpdateDeckCard(
+                        card,
+                        -d.quantity,
+                        d.board || 'mainboard',
+                        d.deckId
+                      )
+                    }
                     className="text-indigo-400 hover:text-red-500 font-bold ml-0.5 cursor-pointer transition-colors"
                     title={`Remove from ${d.deckName}`}
                   >
@@ -145,6 +180,7 @@ export default function CardItem({
               >
                 🏷️ {tag}
                 <button
+                  type="button"
                   onClick={() => handleRemoveTag(card, tag)}
                   className="text-slate-400 hover:text-red-500 font-bold ml-1 cursor-pointer"
                 >
@@ -156,7 +192,9 @@ export default function CardItem({
             <div className="relative inline-block tag-dropdown-container">
               <button
                 type="button"
-                onClick={() => setActiveTagDropdown(isDropdownOpen ? null : scryfallId)}
+                onClick={() =>
+                  setActiveTagDropdown(isDropdownOpen ? null : scryfallId)
+                }
                 className="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer font-medium"
               >
                 + tag ▾
@@ -166,7 +204,9 @@ export default function CardItem({
                 <div className="absolute left-0 mt-1 z-30 w-56 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl space-y-2">
                   <div className="max-h-40 overflow-y-auto space-y-1 pr-1 border-b border-slate-200 dark:border-slate-700 pb-2">
                     {availableTags.length === 0 ? (
-                      <div className="text-xs text-slate-400 px-1 italic">No existing tags</div>
+                      <div className="text-xs text-slate-400 px-1 italic">
+                        No existing tags
+                      </div>
                     ) : (
                       availableTags.map((tag) => {
                         const checked = currentTags.includes(tag);
@@ -225,8 +265,8 @@ export default function CardItem({
         )}
 
         {/* Wishlist Context Status */}
-        {type === 'wishlist' && (
-          totalOwned > 0 ? (
+        {type === 'wishlist' &&
+          (totalOwned > 0 ? (
             <span className="inline-block bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-3.5 py-1.5 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-800">
               📦 In Collection: {totalOwned}x
             </span>
@@ -234,8 +274,7 @@ export default function CardItem({
             <span className="inline-block bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1.5 rounded-full text-xs font-medium">
               Not in library
             </span>
-          )
-        )}
+          ))}
       </div>
 
       {/* Quantity Controllers */}
@@ -245,6 +284,7 @@ export default function CardItem({
             <span className="text-sm font-semibold ml-1">Reg</span>
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => handleUpdateQuantity(card, false, -1)}
                 disabled={owned.reg === 0}
                 className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm"
@@ -253,6 +293,7 @@ export default function CardItem({
               </button>
               <span className="w-6 text-center text-sm font-bold">{owned.reg}</span>
               <button
+                type="button"
                 onClick={() => handleUpdateQuantity(card, false, 1)}
                 className="w-8 h-8 bg-blue-600 text-white rounded font-bold cursor-pointer shadow-sm"
               >
@@ -264,9 +305,12 @@ export default function CardItem({
           <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
 
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">✨ Foil</span>
+            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              ✨ Foil
+            </span>
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => handleUpdateQuantity(card, true, -1)}
                 disabled={owned.foil === 0}
                 className="w-8 h-8 bg-white dark:bg-slate-800 rounded font-bold disabled:opacity-30 cursor-pointer shadow-sm"
@@ -275,6 +319,7 @@ export default function CardItem({
               </button>
               <span className="w-6 text-center text-sm font-bold">{owned.foil}</span>
               <button
+                type="button"
                 onClick={() => handleUpdateQuantity(card, true, 1)}
                 className="w-8 h-8 bg-amber-500 text-white rounded font-bold cursor-pointer shadow-sm"
               >
@@ -285,9 +330,12 @@ export default function CardItem({
         </div>
       ) : (
         <div className="flex items-center justify-between bg-pink-50/60 dark:bg-pink-950/30 p-2.5 rounded-lg border border-pink-200 dark:border-pink-900/50 min-w-[150px] w-full sm:w-auto">
-          <span className="text-sm font-semibold text-pink-800 dark:text-pink-300 ml-1">Want</span>
+          <span className="text-sm font-semibold text-pink-800 dark:text-pink-300 ml-1">
+            Want
+          </span>
           <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={() => handleUpdateWishlistQty(card, -1)}
               className="w-8 h-8 bg-white dark:bg-slate-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-800 dark:text-pink-300 rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
             >
@@ -297,6 +345,7 @@ export default function CardItem({
               {card.desired_quantity}
             </span>
             <button
+              type="button"
               onClick={() => handleUpdateWishlistQty(card, 1)}
               className="w-8 h-8 bg-pink-600 hover:bg-pink-700 text-white rounded font-bold text-sm shadow-sm transition-colors cursor-pointer"
             >

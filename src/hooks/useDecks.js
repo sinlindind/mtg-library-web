@@ -32,7 +32,7 @@ export function useDecks(session) {
     }
   }, [session?.user?.id]);
 
-  // Fetch all cards across all user decks for library/search cross-referencing
+  // Fetch all cards across all user decks for cross-referencing
   const fetchAllDeckCards = useCallback(async (userDecks) => {
     if (!userDecks || userDecks.length === 0) {
       setAllDeckCards([]);
@@ -42,7 +42,7 @@ export function useDecks(session) {
       const deckIds = userDecks.map((d) => d.id);
       const { data, error } = await supabase
         .from('deck_cards')
-        .select('id, deck_id, scryfall_id, card_name, quantity, board')
+        .select('id, deck_id, scryfall_id, card_name, set_name, image_url, quantity, board, is_foil')
         .in('deck_id', deckIds);
 
       if (error) throw error;
@@ -93,10 +93,7 @@ export function useDecks(session) {
 
   // Create a new deck
   const handleCreateDeck = async (name, format = 'commander') => {
-    if (!session?.user?.id || !name.trim()) {
-      console.error('Cannot create deck: No active session user ID.');
-      return;
-    }
+    if (!session?.user?.id || !name.trim()) return;
 
     try {
       const { data, error } = await supabase
@@ -135,44 +132,27 @@ export function useDecks(session) {
     }
   };
 
-  // Add or update card quantity in a deck (robustly parses board and deck ID arguments)
-  const handleUpdateDeckCard = async (card, delta, boardOrDeckId = 'mainboard', maybeBoard = 'mainboard', explicitDeckId = null) => {
-    let targetDeckId = explicitDeckId || activeDeck?.id;
-    let board = 'mainboard';
-
-    // Flexibly parse arguments to distinguish board names ('mainboard' / 'sideboard') from deck IDs
-    const args = [boardOrDeckId, maybeBoard, explicitDeckId].filter(Boolean);
-    for (const arg of args) {
-      if (arg === 'mainboard' || arg === 'sideboard') {
-        board = arg;
-      } else {
-        targetDeckId = arg;
-      }
-    }
-
-    if (!targetDeckId) {
-      alert('Please select or create a deck first.');
-      return;
-    }
+  // Add or update card quantity in a deck (accepts explicit targetDeckId)
+  const handleUpdateDeckCard = async (card, delta, board = 'mainboard', targetDeckId = null) => {
+    const deckIdToUse = targetDeckId || activeDeck?.id;
+    if (!deckIdToUse) return;
 
     const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
-    
-    // Fetch current cards for target deck if needed
+
+    // Fetch current rows for that specific target deck if not activeDeck
     let targetDeckCards = activeDeckCards;
-    if (targetDeckId !== activeDeck?.id) {
-      try {
-        const { data } = await supabase
-          .from('deck_cards')
-          .select('*')
-          .eq('deck_id', targetDeckId);
-        targetDeckCards = Array.isArray(data) ? data : [];
-      } catch (err) {
-        console.error('Error fetching target deck cards:', err.message);
-      }
+    if (targetDeckId && targetDeckId !== activeDeck?.id) {
+      const { data } = await supabase
+        .from('deck_cards')
+        .select('*')
+        .eq('deck_id', targetDeckId);
+      targetDeckCards = Array.isArray(data) ? data : [];
     }
 
     const existingIndex = targetDeckCards.findIndex(
-      (c) => String(c.scryfall_id).trim().toLowerCase() === scryfallId && c.board === board
+      (c) =>
+        String(c.scryfall_id || '').trim().toLowerCase() === scryfallId &&
+        (c.board || 'mainboard') === board
     );
 
     const existingCard = targetDeckCards[existingIndex];
@@ -186,10 +166,8 @@ export function useDecks(session) {
           .eq('id', existingCard.id);
 
         if (!error) {
-          if (targetDeckId === activeDeck?.id) {
-            setActiveDeckCards((prev) =>
-              Array.isArray(prev) ? prev.filter((c) => c.id !== existingCard.id) : []
-            );
+          if (deckIdToUse === activeDeck?.id) {
+            setActiveDeckCards((prev) => prev.filter((c) => c.id !== existingCard.id));
           }
           await fetchAllDeckCards(decks);
         }
@@ -198,7 +176,7 @@ export function useDecks(session) {
     }
 
     const payload = {
-      deck_id: targetDeckId,
+      deck_id: deckIdToUse,
       scryfall_id: scryfallId,
       card_name: card.name || card.card_name,
       set_name: card.set_name || '',
@@ -208,6 +186,7 @@ export function useDecks(session) {
         card.image_url,
       quantity: newQty,
       board: board,
+      is_foil: Boolean(card.is_foil),
     };
 
     if (existingCard) {
@@ -219,12 +198,8 @@ export function useDecks(session) {
         .single();
 
       if (!error && data) {
-        if (targetDeckId === activeDeck?.id) {
-          setActiveDeckCards((prev) =>
-            Array.isArray(prev)
-              ? prev.map((c) => (c.id === data.id ? data : c))
-              : [data]
-          );
+        if (deckIdToUse === activeDeck?.id) {
+          setActiveDeckCards((prev) => prev.map((c) => (c.id === data.id ? data : c)));
         }
         await fetchAllDeckCards(decks);
       }
@@ -236,26 +211,97 @@ export function useDecks(session) {
         .single();
 
       if (!error && data) {
-        if (targetDeckId === activeDeck?.id) {
-          setActiveDeckCards((prev) => [...(Array.isArray(prev) ? prev : []), data]);
+        if (deckIdToUse === activeDeck?.id) {
+          setActiveDeckCards((prev) => [...prev, data]);
         }
         await fetchAllDeckCards(decks);
       }
     }
   };
 
-  // One-click: Send missing deck cards directly to Wishlist
+  // Assign or unset a card as the commander of a deck in Supabase (`board = 'commander'`)
+  const handleSetCommanderCard = async (card, targetDeckId = null) => {
+    const deckIdToUse = targetDeckId || activeDeck?.id;
+    if (!deckIdToUse || !card) return;
+
+    const scryfallId = String(card.scryfall_id || card.id).trim().toLowerCase();
+    if (!scryfallId) return;
+
+    try {
+      const { data: currentRows, error: fetchErr } = await supabase
+        .from('deck_cards')
+        .select('*')
+        .eq('deck_id', deckIdToUse);
+
+      if (fetchErr) throw fetchErr;
+      const rows = Array.isArray(currentRows) ? currentRows : [];
+
+      const existingCommanderRows = rows.filter(
+        (r) => String(r.board || '').toLowerCase() === 'commander'
+      );
+      const isAlreadyThisCommander = existingCommanderRows.some(
+        (r) => String(r.scryfall_id || '').trim().toLowerCase() === scryfallId
+      );
+
+      // Move any previous commander card back to 'mainboard'
+      for (const prevCmd of existingCommanderRows) {
+        const { error: revertErr } = await supabase
+          .from('deck_cards')
+          .update({ board: 'mainboard' })
+          .eq('id', prevCmd.id);
+        if (revertErr) throw revertErr;
+      }
+
+      if (!isAlreadyThisCommander) {
+        const matchingMainboardRow = rows.find(
+          (r) =>
+            String(r.scryfall_id || '').trim().toLowerCase() === scryfallId &&
+            String(r.board || 'mainboard').toLowerCase() === 'mainboard'
+        );
+
+        if (matchingMainboardRow) {
+          const { error: promoteErr } = await supabase
+            .from('deck_cards')
+            .update({ board: 'commander', quantity: 1 })
+            .eq('id', matchingMainboardRow.id);
+          if (promoteErr) throw promoteErr;
+        } else {
+          const { error: insertErr } = await supabase.from('deck_cards').insert([
+            {
+              deck_id: deckIdToUse,
+              scryfall_id: scryfallId,
+              card_name: card.name || card.card_name,
+              set_name: card.set_name || '',
+              image_url:
+                card.image_uris?.normal ||
+                card.card_faces?.[0]?.image_uris?.normal ||
+                card.image_url ||
+                null,
+              quantity: 1,
+              board: 'commander',
+              is_foil: Boolean(card.is_foil),
+            },
+          ]);
+          if (insertErr) throw insertErr;
+        }
+      }
+
+      await fetchDeckCards(deckIdToUse);
+      await fetchAllDeckCards(decks);
+    } catch (err) {
+      console.error('Error setting commander card:', err.message);
+    }
+  };
+
+  // One-click: Send missing active deck cards directly to Wishlist
   const handleExportMissingToWishlist = async (libraryMap, fetchWishlist) => {
     const cards = Array.isArray(activeDeckCards) ? activeDeckCards : [];
-    if (!cards.length || !session?.user?.id) {
-      alert('No active deck selected or deck is empty!');
-      return;
-    }
+    if (!cards.length || !session?.user?.id) return;
 
     const missingItems = [];
 
     cards.forEach((dc) => {
-      const libraryEntry = (libraryMap && libraryMap[String(dc.scryfall_id).trim().toLowerCase()]) || { reg: 0, foil: 0 };
+      const libraryEntry = (libraryMap && libraryMap[dc.scryfall_id]) || { reg: 0, foil: 0 };
       const totalOwned = (libraryEntry.reg || 0) + (libraryEntry.foil || 0);
 
       if (totalOwned < dc.quantity) {
@@ -283,12 +329,9 @@ export function useDecks(session) {
 
       if (error) throw error;
       alert(`Added ${missingItems.length} missing card types to your Wishlist!`);
-      if (typeof fetchWishlist === 'function') {
-        fetchWishlist(session.user.id);
-      }
+      if (fetchWishlist) fetchWishlist(session.user.id);
     } catch (err) {
       console.error('Error sending missing cards to Wishlist:', err.message);
-      alert(`Export to Wishlist failed: ${err.message}`);
     }
   };
 
@@ -304,6 +347,7 @@ export function useDecks(session) {
     handleCreateDeck,
     handleDeleteDeck,
     handleUpdateDeckCard,
+    handleSetCommanderCard,
     handleExportMissingToWishlist,
   };
 }

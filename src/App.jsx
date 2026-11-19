@@ -74,6 +74,7 @@ export default function App() {
     handleCreateDeck,
     handleDeleteDeck,
     handleUpdateDeckCard,
+    handleSetCommanderCard,
     handleExportMissingToWishlist,
   } = useDecks(session);
 
@@ -123,7 +124,10 @@ export default function App() {
     const needsEnrichment = cards.filter(
       (c) =>
         c.scryfall_id &&
-        (c.oracle_text === undefined || c.colors === undefined || c.type_line === undefined || !c.image_url)
+        (c.oracle_text === undefined ||
+          c.colors === undefined ||
+          c.type_line === undefined ||
+          !c.image_url)
     );
 
     if (needsEnrichment.length === 0) {
@@ -132,7 +136,11 @@ export default function App() {
         mana_colors: formatManaColors(c.colors || c.color_identity),
         oracle_text: c.oracle_text || '',
         type_line: c.type_line || '',
-        image_url: c.image_url || c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '',
+        image_url:
+          c.image_url ||
+          c.image_uris?.normal ||
+          c.card_faces?.[0]?.image_uris?.normal ||
+          '',
       }));
     }
 
@@ -206,7 +214,9 @@ export default function App() {
   const generatePdfExport = (enrichedList, activeFields, exportTitle) => {
     const printWindow = window.open('', '_blank', 'width=960,height=800');
     if (!printWindow) {
-      throw new Error('Pop-up blocked. Please allow pop-ups for this site to generate the PDF.');
+      throw new Error(
+        'Pop-up blocked. Please allow pop-ups for this site to generate the PDF.'
+      );
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -223,16 +233,20 @@ export default function App() {
         if (activeFields.includes('mana_colors')) {
           details.push(`<strong>Mana Colors:</strong> ${escapeHtml(item.mana_colors)}`);
         }
-        if (activeFields.includes('reg_quantity') || activeFields.includes('foil_quantity')) {
-          const reg = activeFields.includes('reg_quantity') ? `Reg: ${item.reg_quantity ?? item.quantity ?? 0}` : '';
+        if (
+          activeFields.includes('reg_quantity') ||
+          activeFields.includes('foil_quantity')
+        ) {
+          const reg = activeFields.includes('reg_quantity')
+            ? `Reg: ${item.reg_quantity ?? item.quantity ?? 0}`
+            : '';
           const foil = activeFields.includes('foil_quantity')
             ? `Foil: ${item.foil_quantity ?? 0}`
             : '';
           if (reg || foil) {
             details.push(`<strong>Qty:</strong> ${[reg, foil].filter(Boolean).join(' | ')}`);
           }
-        }
-        else if (activeFields.includes('reg_quantity') && item.quantity !== undefined) {
+        } else if (activeFields.includes('reg_quantity') && item.quantity !== undefined) {
           details.push(`<strong>Qty:</strong> ${item.quantity}`);
         }
 
@@ -240,20 +254,28 @@ export default function App() {
           details.push(`<strong>Tags:</strong> ${escapeHtml(tagsStr)}`);
         }
         if (activeFields.includes('scryfall_id') && item.scryfall_id) {
-          details.push(`<strong>Scryfall ID:</strong> <code>${escapeHtml(item.scryfall_id)}</code>`);
+          details.push(
+            `<strong>Scryfall ID:</strong> <code>${escapeHtml(item.scryfall_id)}</code>`
+          );
         }
 
         return `
           <div class="card-entry ${includeImages ? 'with-image' : ''}">
             ${
               includeImages && item.image_url
-                ? `<div class="card-img-container"><img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.card_name || item.name)}" class="card-thumb" /></div>`
+                ? `<div class="card-img-container"><img src="${escapeHtml(
+                    item.image_url
+                  )}" alt="${escapeHtml(
+                    item.card_name || item.name
+                  )}" class="card-thumb" /></div>`
                 : ''
             }
             <div class="card-content">
               <div class="card-header">
                 <span class="card-title">${
-                  activeFields.includes('card_name') ? escapeHtml(item.card_name || item.name) : 'Card Entry'
+                  activeFields.includes('card_name')
+                    ? escapeHtml(item.card_name || item.name)
+                    : 'Card Entry'
                 }</span>
                 ${
                   activeFields.includes('type_line') && item.type_line
@@ -440,11 +462,15 @@ export default function App() {
           return filteredItem;
         });
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+          type: 'application/json',
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `mtg-${exportSource}-export-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `mtg-${exportSource}-export-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -465,11 +491,15 @@ export default function App() {
           csvRows.push(row.join(','));
         });
 
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([csvRows.join('\n')], {
+          type: 'text/csv;charset=utf-8;',
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `mtg-${exportSource}-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `mtg-${exportSource}-export-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -633,6 +663,7 @@ export default function App() {
               handleCreateDeck={handleCreateDeck}
               handleDeleteDeck={handleDeleteDeck}
               handleUpdateDeckCard={handleUpdateDeckCard}
+              handleSetCommanderCard={handleSetCommanderCard}
               handleExportMissingToWishlist={handleExportMissingToWishlist}
               libraryMap={libraryMap}
               wishlistMap={wishlistMap}
@@ -696,11 +727,19 @@ export default function App() {
                   onChange={(e) => setExportSource(e.target.value)}
                   className="w-full p-2.5 border rounded-lg border-slate-700 bg-slate-800 text-slate-100"
                 >
-                  <option value="library">Full Library Collection ({libraryList.length} cards)</option>
-                  <option value="unassigned">Unassigned Library Cards (Not in any deck)</option>
-                  <option value="wishlist">Wishlist Collection ({wishlistList.length} cards)</option>
+                  <option value="library">
+                    Full Library Collection ({libraryList.length} cards)
+                  </option>
+                  <option value="unassigned">
+                    Unassigned Library Cards (Not in any deck)
+                  </option>
+                  <option value="wishlist">
+                    Wishlist Collection ({wishlistList.length} cards)
+                  </option>
                   {activeDeck && (
-                    <option value="deck">Active Deck: {activeDeck.name} ({activeDeckCards.length} cards)</option>
+                    <option value="deck">
+                      Active Deck: {activeDeck.name} ({activeDeckCards.length} cards)
+                    </option>
                   )}
                 </select>
               </div>
@@ -714,20 +753,30 @@ export default function App() {
                 >
                   <option value="csv">CSV (Comma Separated Values)</option>
                   <option value="json">JSON (JavaScript Object Notation)</option>
-                  <option value="pdf">PDF Extract (Printable Document with Optional Images)</option>
+                  <option value="pdf">
+                    PDF Extract (Printable Document with Optional Images)
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-medium mb-1.5 text-slate-300">Fields to Include</label>
+                <label className="block font-medium mb-1.5 text-slate-300">
+                  Fields to Include
+                </label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800">
                   {Object.keys(selectedFields).map((field) => (
-                    <label key={field} className="flex items-center gap-2 cursor-pointer text-slate-300">
+                    <label
+                      key={field}
+                      className="flex items-center gap-2 cursor-pointer text-slate-300"
+                    >
                       <input
                         type="checkbox"
                         checked={selectedFields[field]}
                         onChange={(e) =>
-                          setSelectedFields((prev) => ({ ...prev, [field]: e.target.checked }))
+                          setSelectedFields((prev) => ({
+                            ...prev,
+                            [field]: e.target.checked,
+                          }))
                         }
                         className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 cursor-pointer"
                       />
